@@ -656,16 +656,6 @@ main(int argc, const char* argv[])
 
     auto ts = TrainStates(move(states),N,Nthread,Nbatch);
 
-    ////
-    ////Visually inspect images to see if they look ok
-    ////
-    //n = 1;
-    //for(auto& img : train)
-    //    {
-    //    writeGray(img,format("img%02d_L%d.png",n++,img.label));
-    //    if(n > 10) break;
-    //    }
-
     Index L;
     MPS W;
     if(fileExists("W"))
