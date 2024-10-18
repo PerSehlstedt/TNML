@@ -1,0 +1,19 @@
+input
+{
+datadir = /home/per/phd-studies/TNML/mllib/MNIST
+
+Ntrain = 1000
+imglen = 28
+
+cutoff = 1E-12
+maxm = 20
+Nsweep = 1
+lambda = 1E-3
+
+Npass = 2 
+
+nthread = 2
+Nbatch = 4
+
+ninitial = 2
+}
