@@ -1,4 +1,4 @@
-Makefile
+# Makefile
 
 *.swp
 
@@ -7,6 +7,11 @@ fixedL
 single
 fulltest
 separate_fulltest
+linear
+
+proj_images/
+sites
+W
 
 # Compiled Object files
 *.slo
