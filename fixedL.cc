@@ -12,7 +12,7 @@ using std::move;
 using std::string;
 using std::vector;
 
-const size_t NL = 10;
+const size_t LABEL_COUNT = 10;
 
 // Struct holding info about training "states"
 struct TState {
@@ -405,25 +405,30 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
         auto svd_args =
             Args{"Cutoff", sweeps.cutoff(sw), "Maxm", sweeps.maxm(sw), "Minm", sweeps.minm(sw), "Sweep", sw};
         // Loop over individual bonds of the MPS
-        for (int b = 1, ha = 1; ha <= 2; sweepnext(b, ha, N)) {
+        for (int bond_idx = 1, ha = 1; ha <= 2; sweepnext(bond_idx, ha, N)) {
             // c and c+dc are j,j+1 if sweeping right
             // if sweeping left they are j,j-1
-            auto c = (ha == 1) ? b : b + 1;
+            auto c = (ha == 1) ? bond_idx : bond_idx + 1;
             auto dc = (ha == 1) ? +1 : -1;
 
             // auto lc = min(c,c+dc)-1;
             // auto rc = max(c,c+dc)+1;
 
-            ts.setBond(b);
+            ts.setBond(bond_idx);
 
-            printfln("Sweep %d Half %d Bond %d", sw, ha, c);
+            printfln("\nSweep %d Half %d Bond %d", sw, ha, c);
 
-            // Save old bond tensor
-            auto origm = commonIndex(W.A(c), W.A(c + dc)).m();
-            auto oB = W.A(c) * W.A(c + dc);
+            // // Save old bond tensor
+            // auto old_m = commonIndex(W.A(c), W.A(c + dc)).m();
+            // auto old_B = W.A(c) * W.A(c + dc);
 
+            // // B is the bond tensor we will optimize
+            // auto B = old_B;
+            // B.scaleTo(1.);
+
+            auto old_m = commonIndex(W.A(c), W.A(c + dc)).m();
             // B is the bond tensor we will optimize
-            auto B = oB;
+            auto B = W.A(c) * W.A(c + dc);
             B.scaleTo(1.);
 
             //
@@ -434,10 +439,10 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
             else
                 Error(format("method type \"%s\" not recognized", method));
 
-            //
-            // Report cost after optimization
-            //
-            printfln("Sweep %d Half %d Bond %d", sw, ha, c);
+            // //
+            // // Report cost after optimization
+            // //
+            // printfln("Sweep %d Half %d Bond %d", sw, ha, c);
 
             // auto oC = quadcost(oB,ts,cargs);
             // auto C = quadcost(B,ts,cargs);
@@ -449,25 +454,25 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
             ITensor S;
             auto spec = svd(B, W.Aref(c), S, W.Aref(c + dc), svd_args);
             W.Aref(c + dc) *= S;
-            auto newm = commonIndex(W.A(c), W.A(c + dc)).m();
+            auto new_m = commonIndex(W.A(c), W.A(c + dc)).m();
             printfln("SVD trunc err = %.2E", spec.truncerr());
 
-            printfln("Original m=%d, New m=%d", origm, newm);
+            printfln("Original m=%d, New m=%d", old_m, new_m);
 
-            auto newB = W.A(c) * W.A(c + dc);
-            Print(norm(newB));
-            printfln("rank(newB) = %d", rank(newB));
-            printfln("|B-newB| = %.3E", norm(B - newB));
+            auto new_B = W.A(c) * W.A(c + dc);
+            Print(norm(new_B));
+            printfln("rank(newB) = %d", rank(new_B));
+            printfln("|B-newB| = %.3E", norm(B - new_B));
 
-            auto newC = quadcost(newB, ts, {cargs, "ShowLabels", true});
-            printfln("--> After SVD, Cost = %.10f", newC / NT);
+            auto new_quadratic_cost = quadcost(new_B, ts, {cargs, "ShowLabels", true});
+            printfln("--> After SVD, Cost = %.10f", new_quadratic_cost / NT);
 
             //
             // Update E's (MPS environment tensors)
             // i.e. projection of training images into current "wings"
             // of the MPS W
             //
-            ts.shiftE(W, b, ha == 1 ? Fromleft : Fromright);
+            ts.shiftE(W, bond_idx, ha == 1 ? Fromleft : Fromright);
 
             if (fileExists("WRITE_WF")) {
                 println("File WRITE_WF found");
@@ -532,7 +537,7 @@ int main(int argc, const char *argv[]) {
     auto Npass = input.getInt("Npass", 4);
     auto cconv = input.getReal("cconv", 1E-10);
 
-    auto labels = array<long, NL>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
+    auto labels = array<long, LABEL_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
     auto train = readMNIST(datadir, mllib::Train, {"NT=", Ntrain});
 

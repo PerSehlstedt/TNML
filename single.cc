@@ -1,7 +1,7 @@
 #include "single.h"
 #include "itensor/util/input.h"
 
-const size_t NL = 10;
+const size_t LABEL_COUNT = 10;
 
 int main(int argc, char *argv[]) {
     setOneThread();
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     auto precalc = input.getYesNo("precalc", true);
 
     auto Wname = format("W%d", L);
-    auto labels = array<long, NL>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
+    auto labels = array<long, LABEL_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
     auto train = readMNIST(datadir, mllib::Train, {"NT=", Ntrain});
 
