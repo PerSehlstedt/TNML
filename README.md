@@ -25,17 +25,17 @@ Also see "Tensor Train Polynomial Models via Riemannian Optimization" by Novikov
 
 Dependencies:
 - ITensor tensor network library: http://itensor.org  (on github at http://github.com/ITensor/ITensor)
-- libpng (available through most package managers): http://www.libpng.org
-- png++: http://www.nongnu.org/pngpp/
+- ~~ libpng (available through most package managers): http://www.libpng.org ~~
+- ~~ png++: http://www.nongnu.org/pngpp/ ~~
 
 Steps to install and run:
 
 1. Install the above dependencies.
 2. Do `cp Makefile.sample Makefile` to create a `Makefile` from the sample provided.
 3. Edit the following variables at the top of your Makefile:
-   - `ITENSOR_DIR`: this should be the folder where you `git clone`'d and installed ITensor (where the options.mk file is located)
-   - `LIBPNG_DIR`: folder where the file libpng16.so (or libpng16.dylib on mac) is located (or change the name of the library if you install a different version of libpng)
-   - `PNGPP_DIR`: folder where the png++ header (.hpp) files are located
+  - `ITENSOR_DIR`: this should be the folder where you `git clone`'d and installed ITensor (where the options.mk file is located)
+  - ~~ `LIBPNG_DIR`: folder where the file libpng16.so (or libpng16.dylib on mac) is located (or change the name of the library if you install a different version of libpng) ~~
+  - ~~ `PNGPP_DIR`: folder where the png++ header (.hpp) files are located ~~
 4. Run the command `make`, which should successfully build the `fixedL` application.
 5. Copy one of the sample input files from the folder `sample_inputs/` to another folder of your choosing. Run each app by doing `./appname input_file_name`.
 6. Edit the input file. At a minimum, change datadir to point to the location of the mllib/MNIST folder (inside of this repo) on your computer. Play around with the other settings such as Ntrain (max number of training images per label) to check basic things about the code before trying a heavy-duty calculation.
