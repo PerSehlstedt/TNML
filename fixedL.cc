@@ -12,7 +12,7 @@ using std::move;
 using std::string;
 using std::vector;
 
-const size_t LABEL_COUNT = 10;
+const size_t LABELS_COUNT = 10;
 
 // Struct holding info about training "states"
 struct TState {
@@ -255,23 +255,21 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
 
     //
     // Set up containers for multithreaded calculations
-    auto deltas = array<ITensor, 10>{};
-    for (auto l : range(10)) {
+    auto deltas = array<ITensor, LABELS_COUNT>{};
+    auto reals = array<vector<Real>, LABELS_COUNT>{};
+    for (auto l : range(LABELS_COUNT)) {
         deltas[l] = setElt(L(1 + l));
-    }
-    auto reals = array<vector<Real>, 10ul>{};
-    for (auto l : range(10)) {
         reals[l] = vector<Real>(ts.Nthread(), 0.);
     }
     auto ints = vector<int>(ts.Nthread(), 0);
     //
 
     ts.execute([&](int nt, TState const &t) {
-        auto weights = array<Real, 10>{};
+        auto weights = array<Real, LABELS_COUNT>{};
         auto P = B * t.v;
         auto dP = deltas[t.l] - P;
         reals[t.l].at(nt) += sqr(norm(dP));
-        for (auto l : range(10)) {
+        for (auto l : range(LABELS_COUNT)) {
             weights[l] = std::abs(P.real(L(1 + l)));
         }
         // print(t.n,": "); for(auto w : weights) print(" ",w); println();
@@ -282,7 +280,7 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
 
     auto CR = lambda * sqr(norm(B));
     auto C = 0.;
-    for (auto l : range(10)) {
+    for (auto l : range(LABELS_COUNT)) {
         auto CL = stdx::accumulate(reals[l], 0.);
         if (showlabels) {
             printfln("  Label l=%d C%d = %.10f", l, l, CL / NT);
@@ -317,8 +315,8 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
         Error("Couldn't find Label index in cgrad");
     }
 
-    auto deltas = array<ITensor, 10>{};
-    for (auto l : range(10)) {
+    auto deltas = array<ITensor, LABELS_COUNT>{};
+    for (auto l : range(LABELS_COUNT)) {
         deltas[l] = setElt(L(1 + l));
     }
 
@@ -565,7 +563,7 @@ int main(int argc, const char *argv[]) {
     auto Npass = input.getInt("Npass", 4);
     auto cconv = input.getReal("cconv", 1E-10);
 
-    auto labels = array<long, LABEL_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
+    auto labels = array<long, LABELS_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
     auto train = readMNIST(datadir, mllib::Train, {"NT=", Ntrain});
 
@@ -597,7 +595,7 @@ int main(int argc, const char *argv[]) {
 
     println("Converting training set to MPS");
     auto states = vector<TState>();
-    auto counts = array<int, 10>{};
+    auto counts = array<int, LABELS_COUNT>{};
     auto n = 1;
     for (auto &img : train) {
         auto l = img.label;
