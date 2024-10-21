@@ -95,7 +95,10 @@ class TrainStates {
     void init(MPS const &W) {
         if (not dirmade_) {
             auto cmd = "mkdir -p " + writeDir();
-            std::system(cmd.c_str());
+            int info = std::system(cmd.c_str());
+            if (info != 0) {
+                Error(format("Failed execution: \"%s\"}", cmd.c_str()));
+            }
             dirmade_ = true;
         }
         auto nextE = vector<ITensor>(batchSize_);
@@ -280,6 +283,7 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
 
     auto CR = lambda * sqr(norm(B));
     auto C = 0.;
+    // This just assumes the labels are in order (?)
     for (auto l : range(LABELS_COUNT)) {
         auto CL = stdx::accumulate(reals[l], 0.);
         if (showlabels) {
@@ -442,14 +446,6 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
 
             printfln("\nSweep %d Half %d Bond %d", sw, ha, c);
 
-            // // Save old bond tensor
-            // auto old_m = commonIndex(W.A(c), W.A(c + dc)).m();
-            // auto old_B = W.A(c) * W.A(c + dc);
-
-            // // B is the bond tensor we will optimize
-            // auto B = old_B;
-            // B.scaleTo(1.);
-
             auto old_m = commonIndex(W.A(c), W.A(c + dc)).m();
             // B is the bond tensor we will optimize
             auto B = W.A(c) * W.A(c + dc);
@@ -486,10 +482,11 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
 
             auto new_B = W.A(c) * W.A(c + dc);
             Print(norm(new_B));
-            printfln("rank(newB) = %d", rank(new_B));
-            printfln("|B-newB| = %.3E", norm(B - new_B));
+            printfln("rank(new_B) = %d", rank(new_B));
+            printfln("|B-new_B| = %.3E", norm(B - new_B));
 
-            auto new_quadratic_cost = quadcost(new_B, ts, {cargs, "ShowLabels", true});
+            // auto new_quadratic_cost = quadcost(new_B, ts, {cargs, "ShowLabels", true});
+            auto new_quadratic_cost = quadcost(new_B, ts, cargs);
             printfln("--> After SVD, Cost = %.10f", new_quadratic_cost / NT);
 
             //
@@ -501,7 +498,11 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
 
             if (fileExists("WRITE_WF")) {
                 println("File WRITE_WF found");
-                system("rm -f WRITE_WF");
+                auto cmd = "rm -f WRITE_WF";
+                int info = system(cmd);
+                if (info != 0) {
+                    Error(format("Failed execution: \"%s\"}", cmd));
+                }
                 println("Writing W to disk");
                 writeToFile("W", W);
             }
@@ -512,7 +513,11 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
                 lf >> lambda;
                 lf.close();
                 args.add("lambda", lambda);
-                system("rm -f LAMBDA");
+                auto cmd = "rm -f LAMBDA";
+                int info = system(cmd);
+                if (info != 0) {
+                    Error(format("Failed execution: \"%s\"}", cmd));
+                }
                 println("new lambda = ", lambda);
             }
 
