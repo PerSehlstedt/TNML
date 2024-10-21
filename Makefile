@@ -12,9 +12,9 @@ APP=$(app)
 else
 APP=single
 APP=fulltest
-APP=fixedL
 APP=separate_fulltest
 APP=linear
+APP=fixedL
 endif
 
 
@@ -26,7 +26,6 @@ OBJECTS=$(APP).o
 GOBJECTS=$(patsubst %,.debug_objs/%, $(OBJECTS))
 
 #Define Flags ----------
-# EXTRA_FLAGS += -std=c++1y -I$(PNGPP_DIR) -I/usr/local/include
 EXTRA_FLAGS += -std=c++1y -I/usr/local/include
 CCFLAGS += $(EXTRA_FLAGS)
 CCGFLAGS += $(EXTRA_FLAGS)
