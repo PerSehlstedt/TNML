@@ -15,18 +15,15 @@ using std::vector;
 static const size_t LABELS_COUNT = 10;
 
 // Struct holding info about training "states"
-struct TState {
+struct TrainingState {
     SiteSet const &sites_;
-    // This is never used???
-    // bool active = true;
     int label = -1;
     int local_dimension = 0;
     ITensor v;
     vector<Real> data;
 
     template <typename Func, typename ImgType>
-    // TState(int n_, int l_, SiteSet const &sites, ImgType const &img, Func const &phi) : sites_(sites), n(n_), label(l_) {
-    TState(int l_, SiteSet const &sites, ImgType const &img, Func const &phi) : sites_(sites), label(l_) {
+    TrainingState(SiteSet const &sites, ImgType const &img, Func const &phi) : sites_(sites), label(img.label) {
         auto N = sites.N();
         local_dimension = sites(1).m();
         data.resize(N * local_dimension);
@@ -54,7 +51,7 @@ struct TState {
 
 class TrainStates {
   public:
-    vector<TState> ts_;
+    vector<TrainingState> ts_;
     int N = 0;
     int currb_ = -1; // left env built to here
     bool dir_is_made_ = false;
@@ -63,7 +60,7 @@ class TrainStates {
     int thread_count_ = 1;
     ParallelDo pd_;
 
-    TrainStates(vector<TState> &&ts, int N_, int thread_count, int batch_count = 1)
+    TrainStates(vector<TrainingState> &&ts, int N_, int thread_count, int batch_count = 1)
         : ts_(move(ts)), N(N_), batch_count_(batch_count), thread_count_(thread_count) {
         const int training_images_count = ts_.size();
         batch_length_ = training_images_count / batch_count;
@@ -83,12 +80,12 @@ class TrainStates {
 
     int thread_count() const { return thread_count_; }
 
-    TState const &front() const { return ts_.front(); }
+    TrainingState const &front() const { return ts_.front(); }
 
-    TState const &operator()(int i) const { return ts_.at(i); }
-    TState &operator()(int i) { return ts_.at(i); }
+    TrainingState const &operator()(int i) const { return ts_.at(i); }
+    TrainingState &operator()(int i) { return ts_.at(i); }
 
-    TState const &getState(int i) const { return ts_.at(i); }
+    TrainingState const &getState(int i) const { return ts_.at(i); }
 
     static string &writeDir() {
         static string wd = "proj_images";
@@ -271,7 +268,7 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
     auto ints = vector<int>(ts.thread_count(), 0);
     //
 
-    ts.execute([&](int nt, TState const &t) {
+    ts.execute([&](int nt, TrainingState const &t) {
         auto weights = array<Real, LABELS_COUNT>{};
         auto P = B * t.v;
         auto dP = deltas[t.label] - P;
@@ -339,7 +336,7 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
     for (auto &T : tensors) {
         T = ITensor{};
     }
-    ts.execute([&](int nt, TState const &t) {
+    ts.execute([&](int nt, TrainingState const &t) {
         auto P = B * t.v;
         auto dP = deltas[t.label] - P;
         tensors.at(nt) += dP * dag(t.v);
@@ -360,7 +357,7 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
         for (auto &r : reals) {
             r = 0.;
         }
-        ts.execute([&](int nt, TState const &t) {
+        ts.execute([&](int nt, TrainingState const &t) {
             // The matrix A is like outer
             // product of dag(v) and v, so
             // dag(p)*A*p is |p*v|^2
@@ -385,7 +382,7 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
         for (auto &r : reals) {
             r = 0.;
         }
-        ts.execute([&](int nt, TState const &t) {
+        ts.execute([&](int nt, TrainingState const &t) {
             auto P = B * t.v;
             auto dP = deltas[t.label] - P;
             tensors.at(nt) += dP * dag(t.v);
@@ -565,6 +562,7 @@ int main(int argc, const char *argv[]) {
 
     auto train = readMNIST(data_dir, mllib::Train, {"NT=", max_training_images_per_label});
 
+    // mps core count?
     auto N = train.front().size();
     auto c = N / 2;
     printfln("%d sites of dimension %d", N, local_dimension);
@@ -592,23 +590,10 @@ int main(int argc, const char *argv[]) {
     };
 
     println("Converting training set to MPS");
-    auto states = vector<TState>();
-    auto counts = array<int, LABELS_COUNT>{};
-    // auto n = 1;
+    auto states = vector<TrainingState>();
     for (auto &img : train) {
-        auto l = img.label;
-        // states.emplace_back(n++, l, sites, img, phi);
-        states.emplace_back(l, sites, img, phi);
-        ++counts[l];
+        states.emplace_back(sites, img, phi);
     }
-    // 
-    // 
-    // Remove later
-    // 
-    // 
-    // for (auto i : range(n-1)) {
-    //     printfln("i: %d, l: %d, n: %d", i, states[i].label, states[i].n);
-    // }
 
     int training_images_count = states.size();
     printfln("Total of %d training images", training_images_count);
