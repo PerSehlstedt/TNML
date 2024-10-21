@@ -6,4 +6,6 @@ AllowShortIfStatementsOnASingleLine: false
 AllowShortBlocksOnASingleLine: Always
 AllowShortFunctionsOnASingleLine: All
 AllowShortLoopsOnASingleLine: false
+AlignConsecutiveStyle: Consecutive
+InsertBraces: true
 ColumnLimit: 120

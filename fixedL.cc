@@ -30,11 +30,12 @@ struct TState {
         d = sites(1).m();
         data.resize(N * d);
         auto i = 0;
-        for (auto j : range1(img.size()))
+        for (auto j : range1(img.size())) {
             for (auto n : range1(d)) {
                 data.at(i) = phi(img(j), n);
                 ++i;
             }
+        }
     }
     Real operator()(int i, int n) const // 1-indexed
     {
@@ -43,8 +44,9 @@ struct TState {
     }
     ITensor A(int i) const {
         auto store = DenseReal(d);
-        for (auto n : range(d))
+        for (auto n : range(d)) {
             store[n] = operator()(i, 1 + n);
+        }
         return ITensor(IndexSet{sites_(i)}, std::move(store));
     }
 };
@@ -120,8 +122,9 @@ class TrainStates {
     }
 
     void setBond(int b) {
-        if (currb_ == b)
+        if (currb_ == b) {
             return;
+        }
         currb_ = b;
         auto lc = b - 1;
         auto rc = b + 2;
@@ -129,26 +132,32 @@ class TrainStates {
         auto useR = (rc < N + 1);
         // TODO: don't realloc on every setBond call
         vector<ITensor> LE, RE;
-        if (useL)
+        if (useL) {
             LE = vector<ITensor>(batchSize_);
-        if (useR)
+        }
+        if (useR) {
             RE = vector<ITensor>(batchSize_);
+        }
         // Make effective image (4 site) tensors
         // Store in t.v of each elem t of ts
         for (auto bn : range(Nbatch_)) {
             auto batchStart = bn * batchSize_;
-            if (useL)
+            if (useL) {
                 readFromFile(fname(bn, lc), LE);
-            if (useR)
+            }
+            if (useR) {
                 readFromFile(fname(bn, rc), RE);
+            }
             pd_([&](Bound b) {
                 for (auto i = b.begin; i < b.end; ++i) {
                     auto &t = ts_.at(batchStart + i);
                     t.v = t.A(lc + 1) * t.A(rc - 1);
-                    if (useL)
+                    if (useL) {
                         t.v *= LE.at(i);
-                    if (useR)
+                    }
+                    if (useR) {
                         t.v *= RE.at(i);
+                    }
                 }
             });
         }
@@ -169,13 +178,15 @@ class TrainStates {
             printfln("## Making new E at %d", c);
         }
         vector<ITensor> prevE;
-        if (hasPrev)
+        if (hasPrev) {
             prevE = vector<ITensor>(batchSize_);
+        }
         auto nextE = vector<ITensor>(batchSize_);
         for (auto bn : range(Nbatch_)) {
             auto batchStart = bn * batchSize_;
-            if (hasPrev)
+            if (hasPrev) {
                 readFromFile(fname(bn, prevc), prevE);
+            }
             pd_([&](Bound b) {
                 for (auto i = b.begin; i < b.end; ++i) {
                     auto &t = ts_.at(batchStart + i);
@@ -229,8 +240,9 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
     auto showlabels = args.getBool("ShowLabels", false);
 
     auto L = findtype(B, Label);
-    if (!L)
+    if (!L) {
         L = findtype(ts.front().v, Label);
+    }
     if (!L) {
         Print(B);
         Print(ts.front().v);
@@ -244,8 +256,9 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
     //
     // Set up containers for multithreaded calculations
     auto deltas = array<ITensor, 10>{};
-    for (auto l : range(10))
+    for (auto l : range(10)) {
         deltas[l] = setElt(L(1 + l));
+    }
     auto reals = array<vector<Real>, 10ul>{};
     for (auto l : range(10)) {
         reals[l] = vector<Real>(ts.Nthread(), 0.);
@@ -262,20 +275,23 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
             weights[l] = std::abs(P.real(L(1 + l)));
         }
         // print(t.n,": "); for(auto w : weights) print(" ",w); println();
-        if (t.l == argmax(weights))
+        if (t.l == argmax(weights)) {
             ints.at(nt) += 1;
+        }
     });
 
     auto CR = lambda * sqr(norm(B));
     auto C = 0.;
     for (auto l : range(10)) {
         auto CL = stdx::accumulate(reals[l], 0.);
-        if (showlabels)
+        if (showlabels) {
             printfln("  Label l=%d C%d = %.10f", l, l, CL / NT);
+        }
         C += CL;
     }
-    if (showlabels)
+    if (showlabels) {
         printfln("  Reg. cost CR = %.10f", CR / NT);
+    }
     C += CR;
     auto ncor = stdx::accumulate(ints, 0);
     auto ninc = (NT - ncor);
@@ -294,14 +310,17 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
     printfln("In cgrad, lambda = %.3E", lambda);
 
     auto L = findtype(B, Label);
-    if (!L)
+    if (!L) {
         L = findtype(ts.front().v, Label);
-    if (!L)
+    }
+    if (!L) {
         Error("Couldn't find Label index in cgrad");
+    }
 
     auto deltas = array<ITensor, 10>{};
-    for (auto l : range(10))
+    for (auto l : range(10)) {
         deltas[l] = setElt(L(1 + l));
+    }
 
     // Workspace for parallel ops
     auto Nthread = ts.Nthread();
@@ -310,8 +329,9 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
     auto ints = vector<int>(Nthread);
 
     // Compute initial gradient
-    for (auto &T : tensors)
+    for (auto &T : tensors) {
         T = ITensor{};
+    }
     ts.execute([&](int nt, TState const &t) {
         auto P = B * t.v;
         auto dP = deltas[t.l] - P;
@@ -322,15 +342,17 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
     //     printfln("tensors[%d] = %s\n",n,tensors.at(n));
     //     }
     auto r = stdx::accumulate(tensors, ITensor{});
-    if (lambda != 0.)
+    if (lambda != 0.) {
         r = r - lambda * B;
+    }
 
     auto p = r;
     for (auto pass : range1(Npass)) {
         println("  Conj grad pass ", pass);
         // Compute p*A*p
-        for (auto &r : reals)
+        for (auto &r : reals) {
             r = 0.;
+        }
         ts.execute([&](int nt, TState const &t) {
             // The matrix A is like outer
             // product of dag(v) and v, so
@@ -345,14 +367,17 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
         B = B + a * p;
         B.scaleTo(1.);
 
-        if (pass == Npass)
+        if (pass == Npass) {
             break;
+        }
 
         // Compute new gradient and cost function
-        for (auto &T : tensors)
+        for (auto &T : tensors) {
             T = ITensor();
-        for (auto &r : reals)
+        }
+        for (auto &r : reals) {
             r = 0.;
+        }
         ts.execute([&](int nt, TState const &t) {
             auto P = B * t.v;
             auto dP = deltas[t.l] - P;
@@ -360,8 +385,9 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
             reals.at(nt) += sqr(norm(dP));
         });
         auto nr = stdx::accumulate(tensors, ITensor{});
-        if (lambda != 0.)
+        if (lambda != 0.) {
             nr = nr - lambda * B;
+        }
         auto beta = sqr(norm(nr) / norm(r));
         r = nr;
         r.scaleTo(1.);
@@ -434,10 +460,11 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
             //
             // Optimize bond tensor B
             //
-            if (method == "conj")
+            if (method == "conj") {
                 cgrad(B, ts, args);
-            else
+            } else {
                 Error(format("method type \"%s\" not recognized", method));
+            }
 
             // //
             // // Report cost after optimization
@@ -491,8 +518,9 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
                 println("new lambda = ", lambda);
             }
 
-            if (pause_step)
+            if (pause_step) {
                 PAUSE;
+            }
 
         } // loop over c,dc
 
@@ -560,8 +588,9 @@ int main(int argc, const char *argv[]) {
     // Local feature map (a lambda function)
     //
     auto phi = [](Real g, int n) -> Real {
-        if (g < 0 || g > 255.)
+        if (g < 0 || g > 255.) {
             Error(format("Expected g=%f to be in [0,255]", g));
+        }
         auto x = g / 255.;
         return pow(x / 4., n - 1);
     };
@@ -636,8 +665,9 @@ int main(int argc, const char *argv[]) {
 
     train.clear(); // to save memory
 
-    if (!findtype(W.A(c), Label))
+    if (!findtype(W.A(c), Label)) {
         Error(format("Label Index not on site %d", c));
+    }
 
     //
     // Project training states (product states)
@@ -650,8 +680,9 @@ int main(int argc, const char *argv[]) {
     println("Calling quadcost...");
     auto C = quadcost(W.A(1) * W.A(2), ts, {"lambda", lambda});
     printfln("Before starting DMRG Cost = %.10f", C / totNtrain);
-    if (pause_step)
+    if (pause_step) {
         PAUSE;
+    }
 
     auto sweeps = Sweeps(Nsweep, minm, maxm, cutoff);
 
