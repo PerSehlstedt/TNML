@@ -17,21 +17,22 @@ static const size_t LABELS_COUNT = 10;
 // Struct holding info about training "states"
 struct TState {
     SiteSet const &sites_;
-    bool active = true;
-    long n = -1;
-    int l = -1;
-    int d = 0;
+    // This is never used???
+    // bool active = true;
+    int label = -1;
+    int local_dimension = 0;
     ITensor v;
     vector<Real> data;
 
     template <typename Func, typename ImgType>
-    TState(int n_, int l_, SiteSet const &sites, ImgType const &img, Func const &phi) : sites_(sites), n(n_), l(l_) {
+    // TState(int n_, int l_, SiteSet const &sites, ImgType const &img, Func const &phi) : sites_(sites), n(n_), label(l_) {
+    TState(int l_, SiteSet const &sites, ImgType const &img, Func const &phi) : sites_(sites), label(l_) {
         auto N = sites.N();
-        d = sites(1).m();
-        data.resize(N * d);
+        local_dimension = sites(1).m();
+        data.resize(N * local_dimension);
         auto i = 0;
         for (auto j : range1(img.size())) {
-            for (auto n : range1(d)) {
+            for (auto n : range1(local_dimension)) {
                 data.at(i) = phi(img(j), n);
                 ++i;
             }
@@ -40,11 +41,11 @@ struct TState {
     Real operator()(int i, int n) const // 1-indexed
     {
         // TODO: change .at() to []
-        return data.at(d * i + n - d - 1);
+        return data.at(local_dimension * i + n - local_dimension - 1);
     }
     ITensor A(int i) const {
-        auto store = DenseReal(d);
-        for (auto n : range(d)) {
+        auto store = DenseReal(local_dimension);
+        for (auto n : range(local_dimension)) {
             store[n] = operator()(i, 1 + n);
         }
         return ITensor(IndexSet{sites_(i)}, std::move(store));
@@ -131,6 +132,7 @@ class TrainStates {
             return;
         }
         currb_ = b;
+        // These mean what (?)
         auto lc = b - 1;
         auto rc = b + 2;
         auto useL = (lc > 0);
@@ -272,13 +274,14 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
     ts.execute([&](int nt, TState const &t) {
         auto weights = array<Real, LABELS_COUNT>{};
         auto P = B * t.v;
-        auto dP = deltas[t.l] - P;
-        reals[t.l].at(nt) += sqr(norm(dP));
+        auto dP = deltas[t.label] - P;
+        // sqr instead of something like pow2 for computing the square is wild (?)
+        reals[t.label].at(nt) += sqr(norm(dP));
         for (auto l : range(LABELS_COUNT)) {
             weights[l] = std::abs(P.real(L(1 + l)));
         }
         // print(t.n,": "); for(auto w : weights) print(" ",w); println();
-        if (t.l == argmax(weights)) {
+        if (t.label == argmax(weights)) {
             ints.at(nt) += 1;
         }
     });
@@ -338,7 +341,7 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
     }
     ts.execute([&](int nt, TState const &t) {
         auto P = B * t.v;
-        auto dP = deltas[t.l] - P;
+        auto dP = deltas[t.label] - P;
         tensors.at(nt) += dP * dag(t.v);
     });
     // for(auto n : range(tensors))
@@ -384,7 +387,7 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
         }
         ts.execute([&](int nt, TState const &t) {
             auto P = B * t.v;
-            auto dP = deltas[t.l] - P;
+            auto dP = deltas[t.label] - P;
             tensors.at(nt) += dP * dag(t.v);
             reals.at(nt) += sqr(norm(dP));
         });
@@ -431,7 +434,7 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
 
     // For loop over sweeps of the MPS
     for (auto sw : range1(sweeps)) {
-        printfln("\nSweep %d maxm=%d minm=%d", sw, sweeps.maxm(sw), sweeps.minm(sw));
+        printfln("\nSweep %d max_m=%d min_m=%d", sw, sweeps.maxm(sw), sweeps.minm(sw));
         auto svd_args =
             Args{"Cutoff", sweeps.cutoff(sw), "Maxm", sweeps.maxm(sw), "Minm", sweeps.minm(sw), "Sweep", sw};
         // Loop over individual bonds of the MPS
@@ -440,9 +443,6 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
             // if sweeping left they are j,j-1
             auto c = (ha == 1) ? bond_idx : bond_idx + 1;
             auto dc = (ha == 1) ? +1 : -1;
-
-            // auto lc = min(c,c+dc)-1;
-            // auto rc = max(c,c+dc)+1;
 
             ts.setBond(bond_idx);
 
@@ -461,15 +461,6 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
             } else {
                 Error(format("method type \"%s\" not recognized", method));
             }
-
-            // //
-            // // Report cost after optimization
-            // //
-            // printfln("Sweep %d Half %d Bond %d", sw, ha, c);
-
-            // auto oC = quadcost(oB,ts,cargs);
-            // auto C = quadcost(B,ts,cargs);
-            // printfln("Cost = %.10f -> %.10f",oC/NT,C/NT);
 
             //
             // SVD B back apart into MPS tensors
@@ -548,7 +539,7 @@ int main(int argc, const char *argv[]) {
 
     int local_dimension = 2;
     auto data_dir = input.getString("datadir", "/Users/mstoudenmire/software/tnml/mllib/MNIST");
-    auto training_images_per_label = input.getInt("Ntrain", 60000);
+    auto max_training_images_per_label = input.getInt("Ntrain", 60000);
     auto batch_count = input.getInt("Nbatch", 10);
     auto sweep_count = input.getInt("Nsweep", 50);
     auto cutoff = input.getReal("cutoff", 1E-10);
@@ -572,7 +563,7 @@ int main(int argc, const char *argv[]) {
 
     auto labels = array<long, LABELS_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
-    auto train = readMNIST(data_dir, mllib::Train, {"NT=", training_images_per_label});
+    auto train = readMNIST(data_dir, mllib::Train, {"NT=", max_training_images_per_label});
 
     auto N = train.front().size();
     auto c = N / 2;
@@ -603,12 +594,22 @@ int main(int argc, const char *argv[]) {
     println("Converting training set to MPS");
     auto states = vector<TState>();
     auto counts = array<int, LABELS_COUNT>{};
-    auto n = 1;
+    // auto n = 1;
     for (auto &img : train) {
         auto l = img.label;
-        states.emplace_back(n++, l, sites, img, phi);
+        // states.emplace_back(n++, l, sites, img, phi);
+        states.emplace_back(l, sites, img, phi);
         ++counts[l];
     }
+    // 
+    // 
+    // Remove later
+    // 
+    // 
+    // for (auto i : range(n-1)) {
+    //     printfln("i: %d, l: %d, n: %d", i, states[i].label, states[i].n);
+    // }
+
     int training_images_count = states.size();
     printfln("Total of %d training images", training_images_count);
 
