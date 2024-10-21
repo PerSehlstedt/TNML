@@ -12,7 +12,7 @@ using std::move;
 using std::string;
 using std::vector;
 
-const size_t LABELS_COUNT = 10;
+static const size_t LABELS_COUNT = 10;
 
 // Struct holding info about training "states"
 struct TState {
@@ -56,21 +56,23 @@ class TrainStates {
     vector<TState> ts_;
     int N = 0;
     int currb_ = -1; // left env built to here
-    bool dirmade_ = false;
-    int Nbatch_ = 1;
-    int batchSize_ = 0;
-    int Nthread_ = 1;
+    bool dir_is_made_ = false;
+    int batch_count_ = 1;
+    int batch_length_ = 0;
+    int thread_count_ = 1;
     ParallelDo pd_;
 
-    TrainStates(vector<TState> &&ts, int N_, int Nthread, int Nbatch = 1)
-        : ts_(move(ts)), N(N_), Nbatch_(Nbatch), Nthread_(Nthread) {
-        int totNtrain = ts_.size();
-        if (totNtrain % Nbatch != 0) {
-            printfln("totNtrain=%d, Nbatch=%d, totNtrain%Nbatch=%d", totNtrain, Nbatch, totNtrain % Nbatch);
-            Error("totNtrain not commensurate with Nbatch");
+    TrainStates(vector<TState> &&ts, int N_, int thread_count, int batch_count = 1)
+        : ts_(move(ts)), N(N_), batch_count_(batch_count), thread_count_(thread_count) {
+        const int training_images_count = ts_.size();
+        batch_length_ = training_images_count / batch_count;
+        const int rem = training_images_count % batch_count;
+        if (rem != 0) {
+            Error(format("training_images_count=%d, batch_count=%d, training_images_count %% batch_count=%d\n"
+                         "training_images_count not commensurate with batch_count",
+                         training_images_count, batch_count, rem));
         }
-        batchSize_ = totNtrain / Nbatch;
-        pd_ = ParallelDo(Nthread, batchSize_);
+        pd_ = ParallelDo(thread_count, batch_length_);
         for (auto &b : pd_.bounds()) {
             printfln("Thread %d %d -> %d (%d)", b.n, b.begin, b.end, b.size());
         }
@@ -78,7 +80,7 @@ class TrainStates {
 
     int size() const { return ts_.size(); }
 
-    int Nthread() const { return Nthread_; }
+    int thread_count() const { return thread_count_; }
 
     TState const &front() const { return ts_.front(); }
 
@@ -93,22 +95,22 @@ class TrainStates {
     }
 
     void init(MPS const &W) {
-        if (not dirmade_) {
+        if (not dir_is_made_) {
             auto cmd = "mkdir -p " + writeDir();
             int info = std::system(cmd.c_str());
             if (info != 0) {
                 Error(format("Failed execution: \"%s\"}", cmd.c_str()));
             }
-            dirmade_ = true;
+            dir_is_made_ = true;
         }
-        auto nextE = vector<ITensor>(batchSize_);
-        auto currE = vector<ITensor>(batchSize_);
-        for (auto bn : range(Nbatch_)) {
-            auto batchStart = bn * batchSize_;
+        auto nextE = vector<ITensor>(batch_length_);
+        auto currE = vector<ITensor>(batch_length_);
+        for (auto batch_idx : range(batch_count_)) {
+            auto batch_start = batch_idx * batch_length_;
             for (auto n = N; n >= 3; --n) {
                 pd_([&](Bound b) {
                     for (auto i = b.begin; i < b.end; ++i) {
-                        auto &t = ts_.at(batchStart + i);
+                        auto &t = ts_.at(batch_start + i);
                         if (n == N) {
                             nextE.at(i) = (t.A(n) * W.A(n));
                         } else {
@@ -118,7 +120,7 @@ class TrainStates {
                     }
                 });
                 currE.swap(nextE);
-                writeToFile(fname(bn, n), currE);
+                writeToFile(fname(batch_idx, n), currE);
             }
         }
         setBond(1);
@@ -136,24 +138,24 @@ class TrainStates {
         // TODO: don't realloc on every setBond call
         vector<ITensor> LE, RE;
         if (useL) {
-            LE = vector<ITensor>(batchSize_);
+            LE = vector<ITensor>(batch_length_);
         }
         if (useR) {
-            RE = vector<ITensor>(batchSize_);
+            RE = vector<ITensor>(batch_length_);
         }
         // Make effective image (4 site) tensors
         // Store in t.v of each elem t of ts
-        for (auto bn : range(Nbatch_)) {
-            auto batchStart = bn * batchSize_;
+        for (auto batch_idx : range(batch_count_)) {
+            auto batch_start = batch_idx * batch_length_;
             if (useL) {
-                readFromFile(fname(bn, lc), LE);
+                readFromFile(fname(batch_idx, lc), LE);
             }
             if (useR) {
-                readFromFile(fname(bn, rc), RE);
+                readFromFile(fname(batch_idx, rc), RE);
             }
             pd_([&](Bound b) {
                 for (auto i = b.begin; i < b.end; ++i) {
-                    auto &t = ts_.at(batchStart + i);
+                    auto &t = ts_.at(batch_start + i);
                     t.v = t.A(lc + 1) * t.A(rc - 1);
                     if (useL) {
                         t.v *= LE.at(i);
@@ -182,17 +184,17 @@ class TrainStates {
         }
         vector<ITensor> prevE;
         if (hasPrev) {
-            prevE = vector<ITensor>(batchSize_);
+            prevE = vector<ITensor>(batch_length_);
         }
-        auto nextE = vector<ITensor>(batchSize_);
-        for (auto bn : range(Nbatch_)) {
-            auto batchStart = bn * batchSize_;
+        auto nextE = vector<ITensor>(batch_length_);
+        for (auto batch_idx : range(batch_count_)) {
+            auto batch_start = batch_idx * batch_length_;
             if (hasPrev) {
-                readFromFile(fname(bn, prevc), prevE);
+                readFromFile(fname(batch_idx, prevc), prevE);
             }
             pd_([&](Bound b) {
                 for (auto i = b.begin; i < b.end; ++i) {
-                    auto &t = ts_.at(batchStart + i);
+                    auto &t = ts_.at(batch_start + i);
                     if (not hasPrev) {
                         nextE.at(i) = t.A(c) * W.A(c);
                     } else {
@@ -201,16 +203,16 @@ class TrainStates {
                     nextE.at(i).scaleTo(1.);
                 }
             });
-            writeToFile(fname(bn, c), nextE);
+            writeToFile(fname(batch_idx, c), nextE);
         }
     }
 
     template <typename Func> void execute(Func &&f) const {
-        for (auto bn : range(Nbatch_)) {
-            auto batchStart = bn * batchSize_;
-            pd_([&f, batchStart, this](Bound b) {
+        for (auto batch_idx : range(batch_count_)) {
+            auto batch_start = batch_idx * batch_length_;
+            pd_([&f, batch_start, this](Bound b) {
                 // printfln("B %d %d->%d",b.n,b.begin,b.end);
-                for (auto i = batchStart + b.begin; i < batchStart + b.end; ++i) {
+                for (auto i = batch_start + b.begin; i < batch_start + b.end; ++i) {
                     auto &t = getState(i);
                     f(b.n, t);
                 }
@@ -262,9 +264,9 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
     auto reals = array<vector<Real>, LABELS_COUNT>{};
     for (auto l : range(LABELS_COUNT)) {
         deltas[l] = setElt(L(1 + l));
-        reals[l] = vector<Real>(ts.Nthread(), 0.);
+        reals[l] = vector<Real>(ts.thread_count(), 0.);
     }
-    auto ints = vector<int>(ts.Nthread(), 0);
+    auto ints = vector<int>(ts.thread_count(), 0);
     //
 
     ts.execute([&](int nt, TState const &t) {
@@ -325,10 +327,10 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
     }
 
     // Workspace for parallel ops
-    auto Nthread = ts.Nthread();
-    auto tensors = vector<ITensor>(Nthread);
-    auto reals = vector<Real>(Nthread);
-    auto ints = vector<int>(Nthread);
+    auto thread_count = ts.thread_count();
+    auto tensors = vector<ITensor>(thread_count);
+    auto reals = vector<Real>(thread_count);
+    auto ints = vector<int>(thread_count);
 
     // Compute initial gradient
     for (auto &T : tensors) {
@@ -422,8 +424,8 @@ void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
     auto replace = args.getBool("Replace", false);
     auto pause_step = args.getBool("PauseStep", false);
 
-    auto Nthread = ts.Nthread();
-    auto reals = vector<Real>(Nthread);
+    auto thread_count = ts.thread_count();
+    auto reals = vector<Real>(thread_count);
 
     auto cargs = Args{args, "Normalize", false};
 
@@ -544,16 +546,16 @@ int main(int argc, const char *argv[]) {
     }
     auto input = InputGroup(argv[1], "input");
 
-    int d = 2;
-    auto datadir = input.getString("datadir", "/Users/mstoudenmire/software/tnml/mllib/MNIST");
-    auto Ntrain = input.getInt("Ntrain", 60000);
-    auto Nbatch = input.getInt("Nbatch", 10);
-    auto Nsweep = input.getInt("Nsweep", 50);
+    int local_dimension = 2;
+    auto data_dir = input.getString("datadir", "/Users/mstoudenmire/software/tnml/mllib/MNIST");
+    auto training_images_per_label = input.getInt("Ntrain", 60000);
+    auto batch_count = input.getInt("Nbatch", 10);
+    auto sweep_count = input.getInt("Nsweep", 50);
     auto cutoff = input.getReal("cutoff", 1E-10);
     auto maxm = input.getInt("maxm", 5000);
     auto minm = input.getInt("minm", max(10, maxm / 2));
     auto ninitial = input.getInt("ninitial", 100);
-    auto Nthread = input.getInt("nthread", 1);
+    auto thread_count = input.getInt("nthread", 1);
     auto replace = input.getYesNo("replace", false);
     auto pause_step = input.getYesNo("pause_step", false);
     // auto feature = input.getString("feature","normal");
@@ -570,20 +572,20 @@ int main(int argc, const char *argv[]) {
 
     auto labels = array<long, LABELS_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
-    auto train = readMNIST(datadir, mllib::Train, {"NT=", Ntrain});
+    auto train = readMNIST(data_dir, mllib::Train, {"NT=", training_images_per_label});
 
     auto N = train.front().size();
     auto c = N / 2;
-    printfln("%d sites of dimension %d", N, d);
+    printfln("%d sites of dimension %d", N, local_dimension);
     SiteSet sites;
     if (fileExists("sites")) {
         sites = readFromFile<SiteSet>("sites");
-        if (sites(1).m() != (long)d) {
-            printfln("Error: d=%d but dimension of first site is %d", d, sites(1).m());
+        if (sites(1).m() != (long)local_dimension) {
+            printfln("Error: d=%d but dimension of first site is %d", local_dimension, sites(1).m());
             EXIT
         }
     } else {
-        sites = SiteSet(N, d);
+        sites = SiteSet(N, local_dimension);
         writeToFile("sites", sites);
     }
 
@@ -607,10 +609,10 @@ int main(int argc, const char *argv[]) {
         states.emplace_back(n++, l, sites, img, phi);
         ++counts[l];
     }
-    int totNtrain = states.size();
-    printfln("Total of %d training images", totNtrain);
+    int training_images_count = states.size();
+    printfln("Total of %d training images", training_images_count);
 
-    auto ts = TrainStates(move(states), N, Nthread, Nbatch);
+    auto ts = TrainStates(move(states), N, thread_count, batch_count);
 
     Index L;
     MPS W;
@@ -682,12 +684,12 @@ int main(int argc, const char *argv[]) {
 
     println("Calling quadcost...");
     auto C = quadcost(W.A(1) * W.A(2), ts, {"lambda", lambda});
-    printfln("Before starting DMRG Cost = %.10f", C / totNtrain);
+    printfln("Before starting DMRG Cost = %.10f", C / training_images_count);
     if (pause_step) {
         PAUSE;
     }
 
-    auto sweeps = Sweeps(Nsweep, minm, maxm, cutoff);
+    auto sweeps = Sweeps(sweep_count, minm, maxm, cutoff);
 
     auto args = Args{"lambda", lambda, "Method", method, "Npass",   Npass,   "alpha",     alpha,
                      "clip",   clip,   "cconv",  cconv,  "Replace", replace, "PauseStep", pause_step};
