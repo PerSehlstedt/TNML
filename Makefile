@@ -26,9 +26,9 @@ OBJECTS=$(APP).o
 GOBJECTS=$(patsubst %,.debug_objs/%, $(OBJECTS))
 
 #Define Flags ----------
-EXTRA_FLAGS += -std=c++1y -I/usr/local/include
-CCFLAGS += $(EXTRA_FLAGS)
-CCGFLAGS += $(EXTRA_FLAGS)
+# EXTRA_FLAGS += -std=c++1y -I/usr/local/include
+# CCFLAGS += $(EXTRA_FLAGS)
+# CCGFLAGS += $(EXTRA_FLAGS)
 
 #Rules ------------------
 
