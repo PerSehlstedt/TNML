@@ -81,11 +81,6 @@ class TrainingSet {
 
     TrainingState const &front() const { return ts_.front(); }
 
-    TrainingState const &operator()(int i) const { return ts_.at(i); }
-    TrainingState &operator()(int i) { return ts_.at(i); }
-
-    TrainingState const &getState(int i) const { return ts_.at(i); }
-
     static string &writeDir() {
         static string wd = "proj_images";
         return wd;
@@ -202,7 +197,7 @@ class TrainingSet {
             pd_([&f, batch_start, this](Bound b) {
                 // printfln("B %d %d->%d",b.n,b.begin,b.end);
                 for (auto i = batch_start + b.begin; i < batch_start + b.end; ++i) {
-                    auto &t = getState(i);
+                    auto &t = ts_.at(i);
                     f(b.n, t);
                 }
             });
