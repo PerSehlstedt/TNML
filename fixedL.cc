@@ -18,8 +18,8 @@ static const size_t LABELS_COUNT = 10;
 // Could have a more generic name since it can technically store test "states" as well, but probably not necessary (?)
 struct TrainingState {
     SiteSet const &sites_;
-    int label = -1;
-    int local_dimension = 0;
+    const int label = -1;
+    const int local_dimension = 0;
     // Not sure what this is supposed to represent, maybe \tilde{\phi}_n in paper (Figure 6(b)) (?)
     // effective image (4 site) tensor, mentioned later in code
     ITensor v;
@@ -57,9 +57,10 @@ class TrainingSet {
     int N = 0;
     int currb_ = -1; // left env built to here
     bool dir_is_made_ = false;
-    int batch_count_ = 1;
+    const int batch_count_ = 1;
+    // This should be made const as well
     int batch_length_ = 0;
-    int thread_count_ = 1;
+    const int thread_count_ = 1;
     ParallelDo pd_;
 
     TrainingSet(vector<TrainingState> &&ts, int N_, int thread_count, int batch_count = 1)
