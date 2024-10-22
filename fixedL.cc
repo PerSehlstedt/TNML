@@ -55,13 +55,6 @@ class TrainingSet {
     vector<TrainingState> ts_;
     // pixel count / number of sites (?)
     int N = 0;
-    int currb_ = -1; // left env built to here
-    bool dir_is_made_ = false;
-    const int batch_count_ = 1;
-    // This should be made const as well
-    int batch_length_ = 0;
-    const int thread_count_ = 1;
-    ParallelDo pd_;
 
     TrainingSet(vector<TrainingState> &&ts, int N_, int thread_count, int batch_count = 1)
         : ts_(move(ts)), N(N_), batch_count_(batch_count), thread_count_(thread_count) {
@@ -218,6 +211,13 @@ class TrainingSet {
 
   private:
     string fname(int nb, int j) { return format("%s/B%03dE%05d", writeDir(), nb, j); }
+    int currb_ = -1; // left env built to here
+    bool dir_is_made_ = false;
+    const int batch_count_ = 1;
+    // This should be made const as well
+    int batch_length_ = 0;
+    const int thread_count_ = 1;
+    ParallelDo pd_;
     vector<ITensor> buffer_1;
     vector<ITensor> buffer_2;
 
