@@ -15,16 +15,19 @@ using std::vector;
 static const size_t LABELS_COUNT = 10;
 
 // Struct holding info about training "states"
+// Could have a more generic name since it can technically store test "states" as well, but probably not necessary (?)
 struct TrainingState {
     SiteSet const &sites_;
     int label = -1;
     int local_dimension = 0;
+    // Not sure what this is supposed to represent, maybe \tilde{\phi}_n in paper (Figure 6(b)) (?)
+    // effective image (4 site) tensor, mentioned later in code
     ITensor v;
     vector<Real> data;
 
     template <typename Func, typename ImgType>
-    TrainingState(SiteSet const &sites, int label, ImgType const &img, Func const &phi) : sites_(sites), label(label) {
-        local_dimension = sites(1).m();
+    TrainingState(SiteSet const &sites, int label, ImgType const &img, Func const &phi)
+        : sites_(sites), label(label), local_dimension(sites(1).m()) {
         auto pixel_count = sites.N();
         data.resize(pixel_count * local_dimension);
         auto i = 0;
@@ -50,6 +53,7 @@ struct TrainingState {
 class TrainingSet {
   public:
     vector<TrainingState> ts_;
+    // pixel count / number of sites (?)
     int N = 0;
     int currb_ = -1; // left env built to here
     bool dir_is_made_ = false;
@@ -68,7 +72,7 @@ class TrainingSet {
                          "training_images_count not commensurate with batch_count",
                          training_images_count, batch_count, rem));
         }
-        pd_ = ParallelDo(thread_count, batch_length_);
+        pd_ = ParallelDo(thread_count_, batch_length_);
         for (auto &b : pd_.bounds()) {
             printfln("Thread %d %d -> %d (%d)", b.n, b.begin, b.end, b.size());
         }
@@ -127,7 +131,7 @@ class TrainingSet {
             return;
         }
         currb_ = b;
-        // These mean what (?)
+        // These mean what (?) Maybe indices for the left and right cores of the bond tensor being optimized?
         auto lc = b - 1;
         auto rc = b + 2;
         auto useL = (lc > 0);
@@ -559,11 +563,10 @@ int main(int argc, const char *argv[]) {
     auto labels = array<long, LABELS_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
     auto training_images = readMNIST(data_dir, mllib::Train, {"NT=", max_training_images_per_label});
-
-    // pixel count?
-    auto N = training_images.front().size();
-    auto c = N / 2;
-    printfln("%d sites of dimension %d", N, local_dimension);
+    auto pixel_count = training_images.front().size();
+    // Is this just where the labels index will be?
+    auto c = pixel_count / 2;
+    printfln("%d sites of dimension %d", pixel_count, local_dimension);
     SiteSet sites;
     if (fileExists("sites")) {
         sites = readFromFile<SiteSet>("sites");
@@ -572,7 +575,7 @@ int main(int argc, const char *argv[]) {
             EXIT
         }
     } else {
-        sites = SiteSet(N, local_dimension);
+        sites = SiteSet(pixel_count, local_dimension);
         writeToFile("sites", sites);
     }
 
@@ -596,7 +599,7 @@ int main(int argc, const char *argv[]) {
     int training_images_count = states.size();
     printfln("Total of %d training images", training_images_count);
 
-    auto ts = TrainingSet(move(states), N, thread_count, batch_count);
+    auto ts = TrainingSet(move(states), pixel_count, thread_count, batch_count);
 
     Index L;
     MPS W;
