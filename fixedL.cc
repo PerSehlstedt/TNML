@@ -22,10 +22,13 @@ struct TrainingState {
     ITensor v;
     vector<Real> data;
 
+    // Better to have label as input since ImgType is template parameter (?)
     template <typename Func, typename ImgType>
-    TrainingState(SiteSet const &sites, ImgType const &img, Func const &phi) : sites_(sites), label(img.label) {
+    TrainingState(SiteSet const &sites, int label, ImgType const &img, Func const &phi) : sites_(sites), label(label) {
         local_dimension = sites(1).m();
-        auto pixel_count = img.size();
+        // auto pixel_count = img.size();
+        // Better to use this since ImgType is template parameter (?)
+        auto pixel_count = sites.N();
         data.resize(pixel_count * local_dimension);
         auto i = 0;
         for (auto j : range1(pixel_count)) {
@@ -590,7 +593,7 @@ int main(int argc, const char *argv[]) {
     println("Converting training set to MPS");
     auto states = vector<TrainingState>();
     for (auto &img : train) {
-        states.emplace_back(sites, img, phi);
+        states.emplace_back(sites, img.label, img, phi);
     }
 
     int training_images_count = states.size();
