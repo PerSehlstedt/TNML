@@ -179,10 +179,9 @@ class TrainingSet {
             pd_([&](Bound b) {
                 for (auto i = b.begin; i < b.end; ++i) {
                     auto &t = ts_.at(batch_start + i);
-                    if (not hasPrev) {
-                        nextE.at(i) = t.A(c) * W.A(c);
-                    } else {
-                        nextE.at(i) = prevE.at(i) * (t.A(c) * W.A(c));
+                    nextE.at(i) = t.A(c) * W.A(c);
+                    if (hasPrev) {
+                        nextE.at(i) *= prevE.at(i);
                     }
                     nextE.at(i).scaleTo(1.);
                 }
