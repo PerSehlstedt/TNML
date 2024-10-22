@@ -22,12 +22,9 @@ struct TrainingState {
     ITensor v;
     vector<Real> data;
 
-    // Better to have label as input since ImgType is template parameter (?)
     template <typename Func, typename ImgType>
     TrainingState(SiteSet const &sites, int label, ImgType const &img, Func const &phi) : sites_(sites), label(label) {
         local_dimension = sites(1).m();
-        // auto pixel_count = img.size();
-        // Better to use this since ImgType is template parameter (?)
         auto pixel_count = sites.N();
         data.resize(pixel_count * local_dimension);
         auto i = 0;
@@ -50,7 +47,7 @@ struct TrainingState {
     }
 };
 
-class TrainStates {
+class TrainingSet {
   public:
     vector<TrainingState> ts_;
     int N = 0;
@@ -61,7 +58,7 @@ class TrainStates {
     int thread_count_ = 1;
     ParallelDo pd_;
 
-    TrainStates(vector<TrainingState> &&ts, int N_, int thread_count, int batch_count = 1)
+    TrainingSet(vector<TrainingState> &&ts, int N_, int thread_count, int batch_count = 1)
         : ts_(move(ts)), N(N_), batch_count_(batch_count), thread_count_(thread_count) {
         const int training_images_count = ts_.size();
         batch_length_ = training_images_count / batch_count;
@@ -239,7 +236,7 @@ class TrainStates {
 // Compute squared distance of the actual output
 // of the model from the ideal output
 //
-Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global()) {
+Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global()) {
     auto NT = ts.size();
     auto lambda = args.getReal("lambda", 0.);
     auto showlabels = args.getBool("ShowLabels", false);
@@ -307,7 +304,7 @@ Real quadcost(ITensor B, TrainStates const &ts, Args const &args = Args::global(
 //
 // Conjugate gradient
 //
-void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
+void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
     auto NT = ts.size();
     auto Npass = args.getInt("Npass");
     auto lambda = args.getReal("lambda", 0.);
@@ -417,7 +414,7 @@ void cgrad(ITensor &B, TrainStates &ts, Args const &args) {
 //
 // M.L. DMRG
 //
-void mldmrg(MPS &W, TrainStates &ts, Sweeps const &sweeps, Args args) {
+void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
     auto N = W.N();
     auto NT = ts.size();
 
@@ -561,10 +558,10 @@ int main(int argc, const char *argv[]) {
 
     auto labels = array<long, LABELS_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
-    auto train = readMNIST(data_dir, mllib::Train, {"NT=", max_training_images_per_label});
+    auto training_images = readMNIST(data_dir, mllib::Train, {"NT=", max_training_images_per_label});
 
-    // mps core count?
-    auto N = train.front().size();
+    // pixel count?
+    auto N = training_images.front().size();
     auto c = N / 2;
     printfln("%d sites of dimension %d", N, local_dimension);
     SiteSet sites;
@@ -592,14 +589,14 @@ int main(int argc, const char *argv[]) {
 
     println("Converting training set to MPS");
     auto states = vector<TrainingState>();
-    for (auto &img : train) {
+    for (auto &img : training_images) {
         states.emplace_back(sites, img.label, img, phi);
     }
 
     int training_images_count = states.size();
     printfln("Total of %d training images", training_images_count);
 
-    auto ts = TrainStates(move(states), N, thread_count, batch_count);
+    auto ts = TrainingSet(move(states), N, thread_count, batch_count);
 
     Index L;
     MPS W;
@@ -640,7 +637,7 @@ int main(int argc, const char *argv[]) {
         for (auto n : range(labels)) {
             auto psis = vector<MPS>(ninitial);
             for (auto m : range(ninitial)) {
-                psis.at(m) = makeMPS(sites, randImg(train, labels[n]), phi);
+                psis.at(m) = makeMPS(sites, randImg(training_images, labels[n]), phi);
             }
             printfln("Summing %d random label %d states", ninitial, labels[n]);
             ipsis.at(n) = sum(psis, {"Cutoff", 1E-10, "Maxm", 10});
@@ -655,7 +652,7 @@ int main(int argc, const char *argv[]) {
     Print(overlap(W, W));
     println("Done making initial W");
 
-    train.clear(); // to save memory
+    training_images.clear(); // to save memory
 
     if (!findtype(W.A(c), Label)) {
         Error(format("Label Index not on site %d", c));
