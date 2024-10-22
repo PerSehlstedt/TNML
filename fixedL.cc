@@ -95,6 +95,7 @@ class TrainingSet {
             }
             dir_is_made_ = true;
         }
+        // This is so ugly but I don't know how to fix it with the way the write system is setup (?)
         auto nextE = vector<ITensor>(batch_length_);
         auto currE = vector<ITensor>(batch_length_);
         for (auto batch_idx : range(batch_count_)) {
@@ -103,12 +104,11 @@ class TrainingSet {
                 pd_([&](Bound b) {
                     for (auto i = b.begin; i < b.end; ++i) {
                         auto &t = ts_.at(batch_start + i);
-                        if (n == N) {
-                            nextE.at(i) = (t.A(n) * W.A(n));
-                        } else {
-                            nextE.at(i) = (t.A(n) * W.A(n)) * currE.at(i);
+                        nextE.at(i) = t.A(n) * W.A(n);
+                        if (n != N) {
+                            nextE.at(i) *= currE.at(i);
                         }
-                        nextE[i].scaleTo(1.);
+                        nextE.at(i).scaleTo(1.);
                     }
                 });
                 currE.swap(nextE);
