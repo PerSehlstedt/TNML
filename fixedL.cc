@@ -77,6 +77,9 @@ class TrainingSet {
         for (auto &b : pd_.bounds()) {
             printfln("Thread %d %d -> %d (%d)", b.n, b.begin, b.end, b.size());
         }
+
+        buffer_1 = vector<ITensor>(batch_length_);
+        buffer_2 = vector<ITensor>(batch_length_);
     }
 
     int size() const { return ts_.size(); }
@@ -137,14 +140,9 @@ class TrainingSet {
         auto rc = b + 2;
         auto useL = (lc > 0);
         auto useR = (rc < N + 1);
-        // TODO: don't realloc on every setBond call
-        vector<ITensor> LE, RE;
-        if (useL) {
-            LE = vector<ITensor>(batch_length_);
-        }
-        if (useR) {
-            RE = vector<ITensor>(batch_length_);
-        }
+
+        auto &LE = buffer_1;
+        auto &RE = buffer_2;
         // Make effective image (4 site) tensors
         // Store in t.v of each elem t of ts
         for (auto batch_idx : range(batch_count_)) {
@@ -168,8 +166,6 @@ class TrainingSet {
                 }
             });
         }
-        LE.clear();
-        RE.clear();
     }
 
     void shiftE(MPS const &W, int b, Direction dir) {
@@ -184,11 +180,9 @@ class TrainingSet {
         } else {
             printfln("## Making new E at %d", c);
         }
-        vector<ITensor> prevE;
-        if (hasPrev) {
-            prevE = vector<ITensor>(batch_length_);
-        }
-        auto nextE = vector<ITensor>(batch_length_);
+
+        auto &prevE = buffer_1;
+        auto &nextE = buffer_2;
         for (auto batch_idx : range(batch_count_)) {
             auto batch_start = batch_idx * batch_length_;
             if (hasPrev) {
@@ -224,6 +218,8 @@ class TrainingSet {
 
   private:
     string fname(int nb, int j) { return format("%s/B%03dE%05d", writeDir(), nb, j); }
+    vector<ITensor> buffer_1;
+    vector<ITensor> buffer_2;
 
     // ITensor&
     // E(int x, int nt)
