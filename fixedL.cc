@@ -24,11 +24,8 @@ struct TrainingState {
 
     template <typename Func, typename ImgType>
     TrainingState(SiteSet const &sites, ImgType const &img, Func const &phi) : sites_(sites), label(img.label) {
-        // N and img.size() should always be the same value, no? (?)
-        // auto N = sites.N();
         local_dimension = sites(1).m();
         auto pixel_count = img.size();
-        // data.resize(N * local_dimension);
         data.resize(pixel_count * local_dimension);
         auto i = 0;
         for (auto j : range1(pixel_count)) {
@@ -38,17 +35,11 @@ struct TrainingState {
             }
         }
     }
-    // Real operator()(int i, int n) const // 1-indexed
-    // {
-    //     // TODO: change .at() to []
-    //     return data.at(local_dimension * i + n - local_dimension - 1);
-    // }
+
     // A is 1-indexed (?)
     ITensor A(int i) const {
         auto store = DenseReal(local_dimension);
         for (auto n : range(local_dimension)) {
-            // store[n] = operator()(i, 1 + n);
-            // assert(store[n] == data.at(local_dimension * (i - 1) + n));
             // TODO: change .at() to []
             store[n] = data.at(local_dimension * (i - 1) + n);
         }
