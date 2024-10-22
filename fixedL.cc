@@ -204,7 +204,6 @@ class TrainingSet {
     }
 
   private:
-    string fname(int nb, int j) { return format("%s/B%03dE%05d", writeDir(), nb, j); }
     int currb_ = -1; // left env built to here
     bool dir_is_made_ = false;
     const int batch_count_ = 1;
@@ -215,6 +214,8 @@ class TrainingSet {
     vector<ITensor> buffer_1;
     vector<ITensor> buffer_2;
 
+    string fname(int nb, int j) { return format("%s/B%03dE%05d", writeDir(), nb, j); }
+    
     // ITensor&
     // E(int x, int nt)
     //     {
