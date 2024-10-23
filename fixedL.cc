@@ -575,15 +575,16 @@ int main(int argc, const char *argv[]) {
     auto c = pixel_count / 2;
     printfln("%d sites of dimension %d", pixel_count, local_dimension);
     SiteSet sites;
-    if (fileExists("sites")) {
-        sites = readFromFile<SiteSet>("sites");
+    auto sites_filename = "sites";
+    if (fileExists(sites_filename)) {
+        sites = readFromFile<SiteSet>(sites_filename);
         if (sites(1).m() != (long)local_dimension) {
             printfln("Error: d=%d but dimension of first site is %d", local_dimension, sites(1).m());
             EXIT
         }
     } else {
         sites = SiteSet(pixel_count, local_dimension);
-        writeToFile("sites", sites);
+        writeToFile(sites_filename, sites);
     }
 
     //
