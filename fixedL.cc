@@ -5,6 +5,8 @@
 #include "util.h"
 #include <future>
 
+#include <chrono>
+
 using namespace itensor;
 using std::array;
 using std::min;
@@ -176,11 +178,11 @@ class TrainingSet {
         auto prevc = (dir == Fromleft) ? b - 1 : b + 2;
         auto hasPrev = (prevc >= 1 && prevc <= N);
 
-        if (hasPrev) {
-            printfln("## Advancing E from %d to %d", prevc, c);
-        } else {
-            printfln("## Making new E at %d", c);
-        }
+        // if (hasPrev) {
+        //     printfln("## Advancing E from %d to %d", prevc, c);
+        // } else {
+        //     printfln("## Making new E at %d", c);
+        // }  // pc
 
         auto &prevE = buffer_1;
         auto &nextE = buffer_2;
@@ -304,9 +306,9 @@ Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global(
         printfln("  Reg. cost CR = %.10f", CR / NT);
     }
     C += CR;
-    auto ncor = stdx::accumulate(ints, 0);
-    auto ninc = (NT - ncor);
-    printfln("Percent correct = %.4f%%, # incorrect = %d/%d", ncor * 100. / NT, ninc, ncor + ninc);
+    // auto ncor = stdx::accumulate(ints, 0);
+    // auto ninc = (NT - ncor);
+    // printfln("Percent correct = %.4f%%, # incorrect = %d/%d", ncor * 100. / NT, ninc, ncor + ninc);  // pc
     return C;
 }
 
@@ -318,7 +320,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
     auto Npass = args.getInt("Npass");
     auto lambda = args.getReal("lambda", 0.);
     auto cconv = args.getReal("cconv", 1E-10);
-    printfln("In cgrad, lambda = %.3E", lambda);
+    // printfln("In cgrad, lambda = %.3E", lambda); // pc
 
     auto L = findtype(B, Label);
     if (!L) {
@@ -359,7 +361,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
 
     auto p = r;
     for (auto pass : range1(Npass)) {
-        println("  Conj grad pass ", pass);
+        // println("  Conj grad pass ", pass); // pc
         // Compute p*A*p
         for (auto &r : reals) {
             r = 0.;
@@ -473,18 +475,18 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             auto spec = svd(B, W.Aref(c), S, W.Aref(c + dc), svd_args);
             W.Aref(c + dc) *= S;
             auto new_m = commonIndex(W.A(c), W.A(c + dc)).m();
-            printfln("SVD trunc err = %.2E", spec.truncerr());
+            // printfln("SVD trunc err = %.2E", spec.truncerr()); // pc
 
-            printfln("Original m=%d, New m=%d", old_m, new_m);
+            // printfln("Original m=%d, New m=%d", old_m, new_m); // pc
 
             auto new_B = W.A(c) * W.A(c + dc);
-            Print(norm(new_B));
-            printfln("rank(new_B) = %d", rank(new_B));
-            printfln("|B-new_B| = %.3E", norm(B - new_B));
+            // Print(norm(new_B)); // pc
+            // printfln("rank(new_B) = %d", rank(new_B)); // pc
+            // printfln("|B-new_B| = %.3E", norm(B - new_B)); // pc
 
             // auto new_quadratic_cost = quadcost(new_B, ts, {cargs, "ShowLabels", true});
             auto new_quadratic_cost = quadcost(new_B, ts, cargs);
-            printfln("--> After SVD, Cost = %.10f", new_quadratic_cost / NT);
+            // printfln("--> After SVD, Cost = %.10f", new_quadratic_cost / NT); // pc
 
             //
             // Update E's (MPS environment tensors)
@@ -493,30 +495,30 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             //
             ts.shiftE(W, bond_idx, ha == 1 ? Fromleft : Fromright);
 
-            if (fileExists("WRITE_WF")) {
-                println("File WRITE_WF found");
-                auto cmd = "rm -f WRITE_WF";
-                int info = system(cmd);
-                if (info != 0) {
-                    Error(format("Failed execution: \"%s\"}", cmd));
-                }
-                println("Writing W to disk");
-                writeToFile("W", W);
-            }
+            // if (fileExists("WRITE_WF")) {
+            //     println("File WRITE_WF found");
+            //     auto cmd = "rm -f WRITE_WF";
+            //     int info = system(cmd);
+            //     if (info != 0) {
+            //         Error(format("Failed execution: \"%s\"}", cmd));
+            //     }
+            //     println("Writing W to disk");
+            //     writeToFile("W", W);
+            // }
 
-            if (fileExists("LAMBDA")) {
-                auto lf = std::ifstream("LAMBDA");
-                Real lambda = 0.;
-                lf >> lambda;
-                lf.close();
-                args.add("lambda", lambda);
-                auto cmd = "rm -f LAMBDA";
-                int info = system(cmd);
-                if (info != 0) {
-                    Error(format("Failed execution: \"%s\"}", cmd));
-                }
-                println("new lambda = ", lambda);
-            }
+            // if (fileExists("LAMBDA")) {
+            //     auto lf = std::ifstream("LAMBDA");
+            //     Real lambda = 0.;
+            //     lf >> lambda;
+            //     lf.close();
+            //     args.add("lambda", lambda);
+            //     auto cmd = "rm -f LAMBDA";
+            //     int info = system(cmd);
+            //     if (info != 0) {
+            //         Error(format("Failed execution: \"%s\"}", cmd));
+            //     }
+            //     println("new lambda = ", lambda);
+            // }
 
             if (pause_step) {
                 PAUSE;
@@ -610,7 +612,7 @@ int main(int argc, const char *argv[]) {
     MPS W;
     auto W_init_file = "Wstart";
     if (fileExists(W_init_file)) {
-        println("Reading W from \"%s\"", W_init_file);
+        printfln("Reading W from \"%s\"", W_init_file);
         W = readFromFile<MPS>(W_init_file, sites);
         L = findtype(W.A(c), Label);
         if (!L) {
@@ -687,7 +689,19 @@ int main(int argc, const char *argv[]) {
     auto args = Args{"lambda", lambda, "Method", method, "Npass",   Npass,   "alpha",     alpha,
                      "clip",   clip,   "cconv",  cconv,  "Replace", replace, "PauseStep", pause_step};
 
+
+    auto start = std::chrono::high_resolution_clock::now();
+
     mldmrg(W, ts, sweeps, args);
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    // std::chrono::duration<double, std::milli> duration = end - start;
+    // std::cout << "Duration: " << duration.count() << " ms" << std::endl;
+
+    std::chrono::duration<double> duration = end - start;
+    std::cout << "Duration: " << duration.count() << " seconds" << std::endl;
+
 
     println("Writing W to disk");
     writeToFile("W", W);
