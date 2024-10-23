@@ -24,6 +24,7 @@ struct TrainingState {
     // effective image (4 site) tensor, mentioned later in code
     ITensor v;
     vector<Real> data;
+    // vector<ITensor> data2;
 
     template <typename Func, typename ImgType>
     TrainingState(SiteSet const &sites, int label, ImgType const &img, Func const &phi)
@@ -37,8 +38,17 @@ struct TrainingState {
                 ++i;
             }
         }
+        // data2 = vector<ITensor>(pixel_count);
+        // for (auto j : range1(pixel_count)) {
+        //     auto store = DenseReal(local_dimension);
+        //     for (auto n : range(local_dimension)) {
+        //         store[n] = phi(img(j), n + 1);
+        //     }
+        //     data2.at(j - 1) = ITensor(IndexSet{sites_(j)}, std::move(store));
+        // }
     }
 
+    // Surely it would be better to just store all the data as a vector of ITensor objects (?)
     // A is 1-indexed (?)
     ITensor A(int i) const {
         auto store = DenseReal(local_dimension);
@@ -48,6 +58,9 @@ struct TrainingState {
         }
         return ITensor(IndexSet{sites_(i)}, std::move(store));
     }
+    // ITensor const &A(int i) const {
+    //     return data2.at(i - 1);
+    // }
 };
 
 class TrainingSet {
@@ -215,7 +228,7 @@ class TrainingSet {
     vector<ITensor> buffer_2;
 
     string fname(int nb, int j) { return format("%s/B%03dE%05d", writeDir(), nb, j); }
-    
+
     // ITensor&
     // E(int x, int nt)
     //     {
