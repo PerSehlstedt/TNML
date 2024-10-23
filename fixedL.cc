@@ -68,11 +68,11 @@ struct TrainingState {
 class TrainingSet {
   public:
     vector<TrainingState> ts_;
-    // pixel count / number of sites (?)
-    int N = 0;
+    // Name pixel_count & site_count can be used interchangeably, (?)
+    int site_count = 0;
 
     TrainingSet(vector<TrainingState> &&ts, int N_, int thread_count, int batch_count = 1)
-        : ts_(move(ts)), N(N_), batch_count_(batch_count), thread_count_(thread_count) {
+        : ts_(move(ts)), site_count(N_), batch_count_(batch_count), thread_count_(thread_count) {
         const int training_images_count = ts_.size();
         batch_length_ = training_images_count / batch_count;
         const int rem = training_images_count % batch_count;
@@ -115,19 +115,19 @@ class TrainingSet {
         auto currE = vector<ITensor>(batch_length_);
         for (auto batch_idx : range(batch_count_)) {
             auto batch_start = batch_idx * batch_length_;
-            for (auto n = N; n >= 3; --n) {
+            for (auto site_idx = site_count; site_idx >= 3; --site_idx) {
                 pd_([&](Bound b) {
                     for (auto i = b.begin; i < b.end; ++i) {
                         auto &t = ts_.at(batch_start + i);
-                        nextE.at(i) = t.A(n) * W.A(n);
-                        if (n != N) {
+                        nextE.at(i) = t.A(site_idx) * W.A(site_idx);
+                        if (site_idx != site_count) {
                             nextE.at(i) *= currE.at(i);
                         }
                         nextE.at(i).scaleTo(1.);
                     }
                 });
                 currE.swap(nextE);
-                writeToFile(fname(batch_idx, n), currE);
+                writeToFile(fname(batch_idx, site_idx), currE);
             }
         }
         setBond(1);
@@ -142,7 +142,7 @@ class TrainingSet {
         auto lc = b - 1;
         auto rc = b + 2;
         auto useL = (lc > 0);
-        auto useR = (rc < N + 1);
+        auto useR = (rc < site_count + 1);
 
         auto &LE = buffer_1;
         auto &RE = buffer_2;
@@ -176,7 +176,7 @@ class TrainingSet {
         auto dc = (dir == Fromleft) ? +1 : -1;
 
         auto prevc = (dir == Fromleft) ? b - 1 : b + 2;
-        auto hasPrev = (prevc >= 1 && prevc <= N);
+        auto hasPrev = (prevc >= 1 && prevc <= site_count);
 
         // if (hasPrev) {
         //     printfln("## Advancing E from %d to %d", prevc, c);
@@ -570,10 +570,10 @@ int main(int argc, const char *argv[]) {
     auto labels = array<long, LABELS_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
     auto training_images = readMNIST(data_dir, mllib::Train, {"NT=", max_training_images_per_label});
-    auto pixel_count = training_images.front().size();
+    auto pixels_per_image = training_images.front().size();
     // Is this just where the labels index will be?
-    auto c = pixel_count / 2;
-    printfln("%d sites of dimension %d", pixel_count, local_dimension);
+    auto c = pixels_per_image / 2;
+    printfln("%d sites of dimension %d", pixels_per_image, local_dimension);
     SiteSet sites;
     auto sites_filename = "sites";
     if (fileExists(sites_filename)) {
@@ -583,7 +583,7 @@ int main(int argc, const char *argv[]) {
             EXIT
         }
     } else {
-        sites = SiteSet(pixel_count, local_dimension);
+        sites = SiteSet(pixels_per_image, local_dimension);
         writeToFile(sites_filename, sites);
     }
 
@@ -607,7 +607,7 @@ int main(int argc, const char *argv[]) {
     int training_images_count = states.size();
     printfln("Total of %d training images", training_images_count);
 
-    auto ts = TrainingSet(move(states), pixel_count, thread_count, batch_count);
+    auto ts = TrainingSet(move(states), pixels_per_image, thread_count, batch_count);
 
     Index L;
     MPS W;
