@@ -608,9 +608,10 @@ int main(int argc, const char *argv[]) {
 
     Index L;
     MPS W;
-    if (fileExists("W")) {
-        println("Reading W from disk");
-        W = readFromFile<MPS>("W", sites);
+    auto W_init_file = "Wstart";
+    if (fileExists(W_init_file)) {
+        println("Reading W from \"%s\"", W_init_file);
+        W = readFromFile<MPS>(W_init_file, sites);
         L = findtype(W.A(c), Label);
         if (!L) {
             printfln("Expected W to have Label type Index at site %d", c);
