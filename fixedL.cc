@@ -69,17 +69,18 @@ class TrainingSet {
   public:
     vector<TrainingState> ts_;
     // Name pixel_count & site_count can be used interchangeably, (?)
+    // This is the amount of sites each TrainingState in ts_ has
     int site_count = 0;
 
     TrainingSet(vector<TrainingState> &&ts, int N_, int thread_count, int batch_count = 1)
         : ts_(move(ts)), site_count(N_), batch_count_(batch_count), thread_count_(thread_count) {
-        const int training_images_count = ts_.size();
-        batch_length_ = training_images_count / batch_count;
-        const int rem = training_images_count % batch_count;
+        const int training_image_count = ts_.size();
+        batch_length_ = training_image_count / batch_count;
+        const int rem = training_image_count % batch_count;
         if (rem != 0) {
-            Error(format("training_images_count=%d, batch_count=%d, training_images_count %% batch_count=%d\n"
-                         "training_images_count not commensurate with batch_count",
-                         training_images_count, batch_count, rem));
+            Error(format("training_image_count=%d, batch_count=%d, training_image_count %% batch_count=%d\n"
+                         "training_image_count not commensurate with batch_count",
+                         training_image_count, batch_count, rem));
         }
         pd_ = ParallelDo(thread_count_, batch_length_);
         for (auto &b : pd_.bounds()) {
@@ -248,7 +249,7 @@ class TrainingSet {
 // of the model from the ideal output
 //
 Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global()) {
-    auto NT = ts.size();
+    auto training_image_count = ts.size();
     auto lambda = args.getReal("lambda", 0.);
     auto showlabels = args.getBool("ShowLabels", false);
 
@@ -298,17 +299,18 @@ Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global(
     for (auto l : range(LABELS_COUNT)) {
         auto CL = stdx::accumulate(reals[l], 0.);
         if (showlabels) {
-            printfln("  Label l=%d C%d = %.10f", l, l, CL / NT);
+            printfln("  Label l=%d C%d = %.10f", l, l, CL / training_image_count);
         }
         C += CL;
     }
     if (showlabels) {
-        printfln("  Reg. cost CR = %.10f", CR / NT);
+        printfln("  Reg. cost CR = %.10f", CR / training_image_count);
     }
     C += CR;
     // auto ncor = stdx::accumulate(ints, 0);
-    // auto ninc = (NT - ncor);
-    // printfln("Percent correct = %.4f%%, # incorrect = %d/%d", ncor * 100. / NT, ninc, ncor + ninc);  // pc
+    // auto ninc = (training_image_count - ncor);
+    // printfln("Percent correct = %.4f%%, # incorrect = %d/%d", ncor * 100. / training_image_count, ninc, ncor + ninc);
+    // // pc
     return C;
 }
 
@@ -316,7 +318,7 @@ Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global(
 // Conjugate gradient
 //
 void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
-    auto NT = ts.size();
+    auto training_image_count = ts.size();
     auto Npass = args.getInt("Npass");
     auto lambda = args.getReal("lambda", 0.);
     auto cconv = args.getReal("cconv", 1E-10);
@@ -350,10 +352,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
         auto dP = deltas[t.label] - P;
         tensors.at(nt) += dP * dag(t.v);
     });
-    // for(auto n : range(tensors))
-    //     {
-    //     printfln("tensors[%d] = %s\n",n,tensors.at(n));
-    //     }
+
     auto r = stdx::accumulate(tensors, ITensor{});
     if (lambda != 0.) {
         r = r - lambda * B;
@@ -407,7 +406,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
 
         auto C = stdx::accumulate(reals, 0.);
         C += lambda * sqr(norm(B));
-        printfln("  Cost = %.10f", C / NT);
+        printfln("  Cost = %.10f", C / training_image_count);
 
         // Quit if gradient gets too small
         if (norm(r) < cconv) {
@@ -427,7 +426,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
 //
 void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
     auto N = W.N();
-    auto NT = ts.size();
+    auto training_image_count = ts.size();
 
     auto method = args.getString("Method");
     auto replace = args.getBool("Replace", false);
@@ -486,7 +485,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
 
             // auto new_quadratic_cost = quadcost(new_B, ts, {cargs, "ShowLabels", true});
             // auto new_quadratic_cost = quadcost(new_B, ts, cargs);
-            // printfln("--> After SVD, Cost = %.10f", new_quadratic_cost / NT); // pc
+            // printfln("--> After SVD, Cost = %.10f", new_quadratic_cost / training_image_count); // pc
 
             //
             // Update E's (MPS environment tensors)
@@ -545,7 +544,7 @@ int main(int argc, const char *argv[]) {
 
     int local_dimension = 2;
     auto data_dir = input.getString("datadir", "/Users/mstoudenmire/software/tnml/mllib/MNIST");
-    auto max_training_images_per_label = input.getInt("Ntrain", 60000);
+    auto max_training_image_count_per_label = input.getInt("Ntrain", 60000);
     auto batch_count = input.getInt("Nbatch", 10);
     auto sweep_count = input.getInt("Nsweep", 50);
     auto cutoff = input.getReal("cutoff", 1E-10);
@@ -569,7 +568,7 @@ int main(int argc, const char *argv[]) {
 
     auto labels = array<long, LABELS_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
-    auto training_images = readMNIST(data_dir, mllib::Train, {"NT=", max_training_images_per_label});
+    auto training_images = readMNIST(data_dir, mllib::Train, {"NT=", max_training_image_count_per_label});
     auto pixels_per_image = training_images.front().size();
     // Is this just where the labels index will be?
     auto c = pixels_per_image / 2;
@@ -604,8 +603,8 @@ int main(int argc, const char *argv[]) {
         states.emplace_back(sites, img.label, img, phi);
     }
 
-    int training_images_count = states.size();
-    printfln("Total of %d training images", training_images_count);
+    int training_image_count = states.size();
+    printfln("Total of %d training images", training_image_count);
 
     auto ts = TrainingSet(move(states), pixels_per_image, thread_count, batch_count);
 
@@ -680,7 +679,7 @@ int main(int argc, const char *argv[]) {
 
     println("Calling quadcost...");
     auto C = quadcost(W.A(1) * W.A(2), ts, {"lambda", lambda});
-    printfln("Before starting DMRG Cost = %.10f", C / training_images_count);
+    printfln("Before starting DMRG Cost = %.10f", C / training_image_count);
     if (pause_step) {
         PAUSE;
     }
@@ -689,7 +688,6 @@ int main(int argc, const char *argv[]) {
 
     auto args = Args{"lambda", lambda, "Method", method, "Npass",   Npass,   "alpha",     alpha,
                      "clip",   clip,   "cconv",  cconv,  "Replace", replace, "PauseStep", pause_step};
-
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -702,7 +700,6 @@ int main(int argc, const char *argv[]) {
 
     std::chrono::duration<double> duration = end - start;
     std::cout << "Duration: " << duration.count() << " seconds" << std::endl;
-
 
     println("Writing W to disk");
     writeToFile("W", W);
