@@ -454,7 +454,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
 
             printfln("\nSweep %d Half %d Bond %d", sw, ha, c);
 
-            auto old_m = commonIndex(W.A(c), W.A(c + dc)).m();
+            // auto old_m = commonIndex(W.A(c), W.A(c + dc)).m();
             // B is the bond tensor we will optimize
             auto B = W.A(c) * W.A(c + dc);
             B.scaleTo(1.);
@@ -474,18 +474,18 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             ITensor S;
             auto spec = svd(B, W.Aref(c), S, W.Aref(c + dc), svd_args);
             W.Aref(c + dc) *= S;
-            auto new_m = commonIndex(W.A(c), W.A(c + dc)).m();
+            // auto new_m = commonIndex(W.A(c), W.A(c + dc)).m();
             // printfln("SVD trunc err = %.2E", spec.truncerr()); // pc
 
             // printfln("Original m=%d, New m=%d", old_m, new_m); // pc
 
-            auto new_B = W.A(c) * W.A(c + dc);
+            // auto new_B = W.A(c) * W.A(c + dc);
             // Print(norm(new_B)); // pc
             // printfln("rank(new_B) = %d", rank(new_B)); // pc
             // printfln("|B-new_B| = %.3E", norm(B - new_B)); // pc
 
             // auto new_quadratic_cost = quadcost(new_B, ts, {cargs, "ShowLabels", true});
-            auto new_quadratic_cost = quadcost(new_B, ts, cargs);
+            // auto new_quadratic_cost = quadcost(new_B, ts, cargs);
             // printfln("--> After SVD, Cost = %.10f", new_quadratic_cost / NT); // pc
 
             //
