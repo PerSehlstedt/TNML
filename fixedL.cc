@@ -225,7 +225,7 @@ class TrainingSet {
                 // printfln("B %d %d->%d",b.n,b.begin,b.end);
                 for (auto i = batch_start + b.begin; i < batch_start + b.end; ++i) {
                     auto &t = ts_.at(i);
-                    // b.n is the thread count (?)
+                    // b.n is the thread index (?)
                     f(b.n, t);
                 }
             });
@@ -360,7 +360,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
     auto reals = vector<Real>(thread_count);
 
     // Compute initial gradient
-    // nt is the thread count (?)
+    // nt is the thread index (?)
     ts.execute([&](int nt, TrainingState const &t) {
         // This is the predicted label with the current weight tensor, fig. 6(c) in paper
         auto P = B * t.v;
