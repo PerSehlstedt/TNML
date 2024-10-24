@@ -5,6 +5,7 @@
 #include "util.h"
 #include <future>
 
+#include <algorithm>
 #include <chrono>
 
 using namespace itensor;
@@ -332,28 +333,34 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
         Error("Couldn't find Label index in cgrad");
     }
 
+    // kronecker deltas, so like y_{n}^{L_n} in section 4 in the paper (?)
     auto deltas = array<ITensor, LABELS_COUNT>{};
     for (auto l : range(LABELS_COUNT)) {
+        // "A single element ITensor is an ITensor constructed using the setElt function. It has exactly one non-zero
+        // element, which can be any element."
+        // I guess this is like a sparse tensor constructor (?)
         deltas[l] = setElt(L(1 + l));
     }
 
     // Workspace for parallel ops
     auto thread_count = ts.thread_count();
-    auto tensors = vector<ITensor>(thread_count);
+    auto tensors = vector<ITensor>(thread_count, ITensor{});
     auto reals = vector<Real>(thread_count);
-    // auto ints = vector<int>(thread_count);
 
     // Compute initial gradient
-    for (auto &T : tensors) {
-        T = ITensor{};
-    }
     ts.execute([&](int nt, TrainingState const &t) {
+        // This is the predicted label with the current weight tensor, fig. 6(c) in paper
         auto P = B * t.v;
+        // This is the difference between the true label and the predicted label, dark square in fig. 6(d) in paper
         auto dP = deltas[t.label] - P;
+        // This is the terms in the sum in gradient, eq. 7 / fig. 6(d) in paper 
+        // dag is abbreviation for dagger, meaning hermitian conjugation (?)
         tensors.at(nt) += dP * dag(t.v);
     });
 
+    // r is the full gradient, why this name??? 
     auto r = stdx::accumulate(tensors, ITensor{});
+    // regularization penalty to include in the cost function, not mentioned in paper but common ML technique (?)
     if (lambda != 0.) {
         r = r - lambda * B;
     }
@@ -362,9 +369,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
     for (auto pass : range1(Npass)) {
         // println("  Conj grad pass ", pass); // pc
         // Compute p*A*p
-        for (auto &r : reals) {
-            r = 0.;
-        }
+        std::fill(reals.begin(), reals.end(), 0.);
         ts.execute([&](int nt, TrainingState const &t) {
             // The matrix A is like outer
             // product of dag(v) and v, so
@@ -384,24 +389,20 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
         }
 
         // Compute new gradient and cost function
-        for (auto &T : tensors) {
-            T = ITensor();
-        }
-        for (auto &r : reals) {
-            r = 0.;
-        }
+        std::fill(tensors.begin(), tensors.end(), ITensor());
+        std::fill(reals.begin(), reals.end(), 0.);
         ts.execute([&](int nt, TrainingState const &t) {
             auto P = B * t.v;
             auto dP = deltas[t.label] - P;
             tensors.at(nt) += dP * dag(t.v);
             reals.at(nt) += sqr(norm(dP));
         });
-        auto nr = stdx::accumulate(tensors, ITensor{});
+        auto new_r = stdx::accumulate(tensors, ITensor{});
         if (lambda != 0.) {
-            nr = nr - lambda * B;
+            new_r = new_r - lambda * B;
         }
-        auto beta = sqr(norm(nr) / norm(r));
-        r = nr;
+        auto beta = sqr(norm(new_r) / norm(r));
+        r = new_r;
         r.scaleTo(1.);
 
         auto C = stdx::accumulate(reals, 0.);
@@ -412,7 +413,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
         if (norm(r) < cconv) {
             // printfln("  |r| = %.1E < %.1E, breaking", norm(r), cconv); // pc
             break;
-        // } else {
+            // } else {
             // printfln("  |r| = %.1E", norm(r)); // pc
         }
 
@@ -451,7 +452,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
 
             ts.setBond(bond_idx);
 
-            printfln("\nSweep %d Half %d Bond %d", sw, ha, c);
+            // printfln("\nSweep %d Half %d Bond %d", sw, ha, c);
 
             // auto old_m = commonIndex(W.A(c), W.A(c + dc)).m();
             // B is the bond tensor we will optimize
@@ -529,6 +530,12 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         writeToFile("W", W);
 
     } // loop over sweeps
+    
+    // These are temporarily here
+    auto new_B = W.A(1) * W.A(2);
+    auto new_quadratic_cost = quadcost(new_B, ts, cargs);
+    printfln("--> After Sweep, Cost = %.10f", new_quadratic_cost / training_image_count); // pc
+
 
 } // mldmrg
 
