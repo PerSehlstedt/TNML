@@ -9,6 +9,7 @@ fulltest
 separate_fulltest
 linear
 
+*.txt
 proj_images/
 sites
 W
