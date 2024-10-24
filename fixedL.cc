@@ -595,15 +595,15 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             std::ref(setBond_timings), std::ref(createB_timings), std::ref(optimizeB_timings), std::ref(svd_timings),
             std::ref(shiftE_timings)};
 
-        std::cout << "Time for each bond [ms]\n";
-        std::cout << "t_idx setBond createB optimizeB svd shiftE\n";
-        for (int i : range(timing_count)) {
-            std::cout << i << " ";
-            for (auto &t : all_timings) {
-                std::cout << t.get().at(i) << " ";
-            }
-            std::cout << "\n";
-        }
+        // std::cout << "Time for each bond [ms]\n";
+        // std::cout << "t_idx setBond createB optimizeB svd shiftE\n";
+        // for (int i : range(timing_count)) {
+        //     std::cout << i << " ";
+        //     for (auto &t : all_timings) {
+        //         std::cout << t.get().at(i) << " ";
+        //     }
+        //     std::cout << "\n";
+        // }
 
         std::cout << "Average time for each bond [ms]\n";
         std::cout << "setBond createB optimizeB svd shiftE\n";
