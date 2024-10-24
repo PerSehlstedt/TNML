@@ -15,7 +15,7 @@ using std::move;
 using std::string;
 using std::vector;
 
-static const size_t LABELS_COUNT = 10;
+static const size_t LABEL_COUNT = 10;
 
 // clang-format off
 #define TIME_IT(block, duration_ms)                                                   \
@@ -281,9 +281,9 @@ Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global(
 
     //
     // Set up containers for multithreaded calculations
-    auto deltas = array<ITensor, LABELS_COUNT>{};
-    auto reals = array<vector<Real>, LABELS_COUNT>{};
-    for (auto l : range(LABELS_COUNT)) {
+    auto deltas = array<ITensor, LABEL_COUNT>{};
+    auto reals = array<vector<Real>, LABEL_COUNT>{};
+    for (auto l : range(LABEL_COUNT)) {
         deltas[l] = setElt(L(1 + l));
         reals[l] = vector<Real>(ts.thread_count(), 0.);
     }
@@ -291,12 +291,12 @@ Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global(
     //
 
     ts.execute([&](int nt, TrainingState const &t) {
-        auto weights = array<Real, LABELS_COUNT>{};
+        auto weights = array<Real, LABEL_COUNT>{};
         auto P = B * t.v;
         auto dP = deltas[t.label] - P;
         // sqr instead of something like pow2 for computing the square is wild (?)
         reals[t.label].at(nt) += sqr(norm(dP));
-        for (auto l : range(LABELS_COUNT)) {
+        for (auto l : range(LABEL_COUNT)) {
             weights[l] = std::abs(P.real(L(1 + l)));
         }
         // print(t.n,": "); for(auto w : weights) print(" ",w); println();
@@ -308,7 +308,7 @@ Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global(
     auto CR = lambda * sqr(norm(B));
     auto C = 0.;
     // This just assumes the labels are in order (?)
-    for (auto l : range(LABELS_COUNT)) {
+    for (auto l : range(LABEL_COUNT)) {
         auto CL = stdx::accumulate(reals[l], 0.);
         if (showlabels) {
             printfln("  Label l=%d C%d = %.10f", l, l, CL / training_image_count);
@@ -345,8 +345,8 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
     }
 
     // kronecker deltas, so like y_{n}^{L_n} in section 4 in the paper (?)
-    auto deltas = array<ITensor, LABELS_COUNT>{};
-    for (auto l : range(LABELS_COUNT)) {
+    auto deltas = array<ITensor, LABEL_COUNT>{};
+    for (auto l : range(LABEL_COUNT)) {
         // "A single element ITensor is an ITensor constructed using the setElt function. It has exactly one non-zero
         // element, which can be any element."
         // I guess this is like a sparse tensor constructor (?)
@@ -656,7 +656,7 @@ int main(int argc, const char *argv[]) {
     auto Npass = input.getInt("Npass", 4);
     auto cconv = input.getReal("cconv", 1E-10);
 
-    auto labels = array<long, LABELS_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
+    auto labels = array<long, LABEL_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
     auto training_images = readMNIST(data_dir, mllib::Train, {"NT=", max_training_image_count_per_label});
     auto pixels_per_image = training_images.front().size();
