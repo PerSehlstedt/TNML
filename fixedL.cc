@@ -17,6 +17,16 @@ using std::vector;
 
 static const size_t LABELS_COUNT = 10;
 
+// clang-format off
+#define TIME_IT(block, duration)                                     \
+    {                                                                \
+        auto start_time = std::chrono::high_resolution_clock::now(); \
+        block                                                        \
+        auto end_time = std::chrono::high_resolution_clock::now();   \
+        duration = end_time - start_time;                            \
+    }
+// clang-format on
+
 // Struct holding info about training "states"
 // Could have a more generic name since it can technically store test "states" as well, but probably not necessary (?)
 struct TrainingState {
@@ -353,12 +363,12 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
         auto P = B * t.v;
         // This is the difference between the true label and the predicted label, dark square in fig. 6(d) in paper
         auto dP = deltas[t.label] - P;
-        // This is the terms in the sum in gradient, eq. 7 / fig. 6(d) in paper 
+        // This is the terms in the sum in gradient, eq. 7 / fig. 6(d) in paper
         // dag is abbreviation for dagger, meaning hermitian conjugation (?)
         tensors.at(nt) += dP * dag(t.v);
     });
 
-    // r is the full gradient, why this name??? 
+    // r is the full gradient, why this name???
     auto r = stdx::accumulate(tensors, ITensor{});
     // regularization penalty to include in the cost function, not mentioned in paper but common ML technique (?)
     if (lambda != 0.) {
@@ -438,6 +448,14 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
 
     auto cargs = Args{args, "Normalize", false};
 
+    int t_idx = 0;
+    int timings_count = 2 * (N - 1);
+    auto setBond_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
+    auto createB_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
+    auto cgrad_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
+    auto svd_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
+    auto shiftE_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
+
     // For loop over sweeps of the MPS
     for (auto sw : range1(sweeps)) {
         printfln("\nSweep %d max_m=%d min_m=%d", sw, sweeps.maxm(sw), sweeps.minm(sw));
@@ -450,30 +468,58 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             auto c = (ha == 1) ? bond_idx : bond_idx + 1;
             auto dc = (ha == 1) ? +1 : -1;
 
-            ts.setBond(bond_idx);
-
             // printfln("\nSweep %d Half %d Bond %d", sw, ha, c);
+
+            // ts.setBond(bond_idx);
+            // clang-format off
+            TIME_IT(
+            ts.setBond(bond_idx);
+            , setBond_timings.at(t_idx));
+            // clang-format on
 
             // auto old_m = commonIndex(W.A(c), W.A(c + dc)).m();
             // B is the bond tensor we will optimize
-            auto B = W.A(c) * W.A(c + dc);
+            // auto B = W.A(c) * W.A(c + dc);
+            // B.scaleTo(1.);
+            ITensor B;
+            // clang-format off
+            TIME_IT(
+            B = W.A(c) * W.A(c + dc); 
             B.scaleTo(1.);
+            , createB_timings.at(t_idx));
+            // clang-format on
 
             //
             // Optimize bond tensor B
             //
+            // if (method == "conj") {
+            //     cgrad(B, ts, args);
+            // } else {
+            //     Error(format("method type \"%s\" not recognized", method));
+            // }
+            // clang-format off
+            TIME_IT(
             if (method == "conj") {
                 cgrad(B, ts, args);
             } else {
                 Error(format("method type \"%s\" not recognized", method));
             }
+            , cgrad_timings.at(t_idx));
+            // clang-format on
 
             //
             // SVD B back apart into MPS tensors
             //
+            // ITensor S;
+            // auto spec = svd(B, W.Aref(c), S, W.Aref(c + dc), svd_args);
+            // W.Aref(c + dc) *= S;
+            // clang-format off
+            TIME_IT(
             ITensor S;
             auto spec = svd(B, W.Aref(c), S, W.Aref(c + dc), svd_args);
             W.Aref(c + dc) *= S;
+            , svd_timings.at(t_idx));
+            // clang-format on
             // auto new_m = commonIndex(W.A(c), W.A(c + dc)).m();
             // printfln("SVD trunc err = %.2E", spec.truncerr()); // pc
 
@@ -493,7 +539,12 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             // i.e. projection of training images into current "wings"
             // of the MPS W
             //
+            // ts.shiftE(W, bond_idx, ha == 1 ? Fromleft : Fromright);
+            // clang-format off
+            TIME_IT(
             ts.shiftE(W, bond_idx, ha == 1 ? Fromleft : Fromright);
+            , shiftE_timings.at(t_idx));
+            // clang-format on
 
             // if (fileExists("WRITE_WF")) {
             //     println("File WRITE_WF found");
@@ -523,19 +574,52 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             if (pause_step) {
                 PAUSE;
             }
+            t_idx++;
 
         } // loop over c,dc
 
         println("Writing W to disk");
         writeToFile("W", W);
 
-    } // loop over sweeps
-    
-    // These are temporarily here
-    auto new_B = W.A(1) * W.A(2);
-    auto new_quadratic_cost = quadcost(new_B, ts, cargs);
-    printfln("--> After Sweep, Cost = %.10f", new_quadratic_cost / training_image_count); // pc
+        // These are temporarily here
+        auto new_B = W.A(1) * W.A(2);
+        auto new_quadratic_cost = quadcost(new_B, ts, cargs);
+        printfln("--> After Sweep, Cost = %.10f", new_quadratic_cost / training_image_count);
 
+        std::vector<std::reference_wrapper<std::vector<std::chrono::duration<double, std::milli>>>> all_timings = {
+            std::ref(setBond_timings), std::ref(createB_timings), std::ref(cgrad_timings), std::ref(svd_timings),
+            std::ref(shiftE_timings)};
+
+        std::cout << "Time for each bond [ms]\n";
+        std::cout << "t_idx setBond createB cgrad svd shiftE\n";
+        for (int i : range(t_idx)) {
+            std::cout << i << " ";
+            for (auto &t : all_timings) {
+                std::cout << t.get().at(i).count() << " ";
+            }
+            std::cout << "\n";
+        }
+
+        std::cout << "Average time for each bond [ms]\n";
+        std::cout << "setBond createB cgrad svd shiftE\n";
+        auto all_avg_timings = vector<double>(all_timings.size());
+        for (auto i : range(all_timings.size())) {
+            all_avg_timings.at(i) =
+                (stdx::accumulate(all_timings.at(i).get(), std::chrono::duration<double, std::milli>(0)).count() /
+                 timings_count);
+            std::cout << all_avg_timings.at(i) << " ";
+        }
+        std::cout << "\n";
+
+        std::cout << "Average Timings for each bond [%]\n";
+        std::cout << "setBond createB cgrad svd shiftE\n";
+        auto total_avg_time = stdx::accumulate(all_avg_timings, 0.);
+        for (auto &t : all_avg_timings) {
+            std::cout << t / total_avg_time << " ";
+        }
+        std::cout << "\n";
+
+    } // loop over sweeps
 
 } // mldmrg
 
