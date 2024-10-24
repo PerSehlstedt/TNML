@@ -183,6 +183,7 @@ class TrainingSet {
         }
     }
 
+    // Could just use the currb_ memeber (?)
     void shiftE(MPS const &W, int b, Direction dir) {
         auto c = (dir == Fromleft) ? b : b + 1;
         auto dc = (dir == Fromleft) ? +1 : -1;
