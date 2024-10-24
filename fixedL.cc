@@ -18,12 +18,12 @@ using std::vector;
 static const size_t LABELS_COUNT = 10;
 
 // clang-format off
-#define TIME_IT(block, duration)                                     \
-    {                                                                \
-        auto start_time = std::chrono::high_resolution_clock::now(); \
-        block                                                        \
-        auto end_time = std::chrono::high_resolution_clock::now();   \
-        duration = end_time - start_time;                            \
+#define TIME_IT(block, duration_ms)                                                   \
+    {                                                                                 \
+        auto start = std::chrono::high_resolution_clock::now();                       \
+        block                                                                         \
+        auto end = std::chrono::high_resolution_clock::now();                         \
+        duration_ms = std::chrono::duration<double, std::milli>(end - start).count(); \
     }
 // clang-format on
 
@@ -451,11 +451,11 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
 
     int t_idx = 0;
     int timings_count = 2 * (N - 1);
-    auto setBond_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
-    auto createB_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
-    auto cgrad_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
-    auto svd_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
-    auto shiftE_timings = vector<std::chrono::duration<double, std::milli>>(timings_count);
+    auto setBond_timings = vector<double>(timings_count);
+    auto createB_timings = vector<double>(timings_count);
+    auto cgrad_timings = vector<double>(timings_count);
+    auto svd_timings = vector<double>(timings_count);
+    auto shiftE_timings = vector<double>(timings_count);
 
     // For loop over sweeps of the MPS
     for (auto sw : range1(sweeps)) {
@@ -587,7 +587,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         auto new_quadratic_cost = quadcost(new_B, ts, cargs);
         printfln("--> After Sweep, Cost = %.10f", new_quadratic_cost / training_image_count);
 
-        std::vector<std::reference_wrapper<std::vector<std::chrono::duration<double, std::milli>>>> all_timings = {
+        std::vector<std::reference_wrapper<std::vector<double>>> all_timings = {
             std::ref(setBond_timings), std::ref(createB_timings), std::ref(cgrad_timings), std::ref(svd_timings),
             std::ref(shiftE_timings)};
 
@@ -596,7 +596,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         for (int i : range(t_idx)) {
             std::cout << i << " ";
             for (auto &t : all_timings) {
-                std::cout << t.get().at(i).count() << " ";
+                std::cout << t.get().at(i) << " ";
             }
             std::cout << "\n";
         }
@@ -605,9 +605,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         std::cout << "setBond createB cgrad svd shiftE\n";
         auto all_avg_timings = vector<double>(all_timings.size());
         for (auto i : range(all_timings.size())) {
-            all_avg_timings.at(i) =
-                (stdx::accumulate(all_timings.at(i).get(), std::chrono::duration<double, std::milli>(0)).count() /
-                 timings_count);
+            all_avg_timings.at(i) = stdx::accumulate(all_timings.at(i).get(), 0.) / timings_count;
             std::cout << all_avg_timings.at(i) << " ";
         }
         std::cout << "\n";
@@ -787,11 +785,8 @@ int main(int argc, const char *argv[]) {
 
     auto end = std::chrono::high_resolution_clock::now();
 
-    // std::chrono::duration<double, std::milli> duration = end - start;
-    // std::cout << "Duration: " << duration.count() << " ms" << std::endl;
-
     std::chrono::duration<double> duration = end - start;
-    std::cout << "Duration: " << duration.count() << " seconds" << std::endl;
+    std::cout << "Duration: " << duration.count() << " seconds\n";
 
     println("Writing W to disk");
     writeToFile("W", W);
