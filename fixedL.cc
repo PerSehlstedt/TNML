@@ -441,6 +441,13 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
     auto training_image_count = ts.size();
 
     auto method = args.getString("Method");
+    std::function<void(ITensor &, TrainingSet &, Args const &)> optimize_bond_tensor;
+    if (method == "conj") {
+        optimize_bond_tensor = cgrad;
+    } else {
+        Error(format("method type \"%s\" not recognized", method));
+    }
+
     auto replace = args.getBool("Replace", false);
     auto pause_step = args.getBool("PauseStep", false);
 
@@ -459,7 +466,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
     // For loop over sweeps of the MPS
     for (auto sw : range1(sweeps)) {
         int t_idx = 0;
-        
+
         printfln("\nSweep %d max_m=%d min_m=%d", sw, sweeps.maxm(sw), sweeps.minm(sw));
         auto svd_args =
             Args{"Cutoff", sweeps.cutoff(sw), "Maxm", sweeps.maxm(sw), "Minm", sweeps.minm(sw), "Sweep", sw};
@@ -501,11 +508,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             // }
             // clang-format off
             TIME_IT(
-            if (method == "conj") {
-                cgrad(B, ts, args);
-            } else {
-                Error(format("method type \"%s\" not recognized", method));
-            }
+            optimize_bond_tensor(B, ts, args);
             , cgrad_timings.at(t_idx));
             // clang-format on
 
