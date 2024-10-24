@@ -449,16 +449,17 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
 
     auto cargs = Args{args, "Normalize", false};
 
-    int t_idx = 0;
-    int timings_count = 2 * (N - 1);
-    auto setBond_timings = vector<double>(timings_count);
-    auto createB_timings = vector<double>(timings_count);
-    auto cgrad_timings = vector<double>(timings_count);
-    auto svd_timings = vector<double>(timings_count);
-    auto shiftE_timings = vector<double>(timings_count);
+    int timing_count = 2 * (N - 1);
+    auto setBond_timings = vector<double>(timing_count);
+    auto createB_timings = vector<double>(timing_count);
+    auto cgrad_timings = vector<double>(timing_count);
+    auto svd_timings = vector<double>(timing_count);
+    auto shiftE_timings = vector<double>(timing_count);
 
     // For loop over sweeps of the MPS
     for (auto sw : range1(sweeps)) {
+        int t_idx = 0;
+        
         printfln("\nSweep %d max_m=%d min_m=%d", sw, sweeps.maxm(sw), sweeps.minm(sw));
         auto svd_args =
             Args{"Cutoff", sweeps.cutoff(sw), "Maxm", sweeps.maxm(sw), "Minm", sweeps.minm(sw), "Sweep", sw};
@@ -593,7 +594,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
 
         std::cout << "Time for each bond [ms]\n";
         std::cout << "t_idx setBond createB cgrad svd shiftE\n";
-        for (int i : range(t_idx)) {
+        for (int i : range(timing_count)) {
             std::cout << i << " ";
             for (auto &t : all_timings) {
                 std::cout << t.get().at(i) << " ";
@@ -605,7 +606,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         std::cout << "setBond createB cgrad svd shiftE\n";
         auto all_avg_timings = vector<double>(all_timings.size());
         for (auto i : range(all_timings.size())) {
-            all_avg_timings.at(i) = stdx::accumulate(all_timings.at(i).get(), 0.) / timings_count;
+            all_avg_timings.at(i) = stdx::accumulate(all_timings.at(i).get(), 0.) / timing_count;
             std::cout << all_avg_timings.at(i) << " ";
         }
         std::cout << "\n";
