@@ -20,9 +20,9 @@ static const size_t LABEL_COUNT = 10;
 // clang-format off
 #define TIME_IT(block, duration_ms)                                                   \
     {                                                                                 \
-        auto start = std::chrono::high_resolution_clock::now();                       \
+        const auto start = std::chrono::high_resolution_clock::now();                 \
         block                                                                         \
-        auto end = std::chrono::high_resolution_clock::now();                         \
+        const auto end = std::chrono::high_resolution_clock::now();                   \
         duration_ms = std::chrono::duration<double, std::milli>(end - start).count(); \
     }
 // clang-format on
@@ -42,7 +42,7 @@ struct TrainingState {
     template <typename Func, typename ImgType>
     TrainingState(SiteSet const &sites, int label, ImgType const &img, Func const &phi)
         : sites_(sites), label(label), local_dimension(sites(1).m()) {
-        auto pixel_count = sites.N();
+        const auto pixel_count = sites.N();
         data.resize(pixel_count * local_dimension);
         auto i = 0;
         for (auto j : range1(pixel_count)) {
@@ -151,10 +151,10 @@ class TrainingSet {
         }
         currb_ = b;
         // These mean what (?) Maybe indices for the left and right cores of the bond tensor being optimized?
-        auto lc = b - 1;
-        auto rc = b + 2;
-        auto useL = (lc > 0);
-        auto useR = (rc < site_count + 1);
+        const auto lc = b - 1;
+        const auto rc = b + 2;
+        const auto useL = (lc > 0);
+        const auto useR = (rc < site_count + 1);
 
         auto &LE = buffer_1;
         auto &RE = buffer_2;
@@ -185,11 +185,11 @@ class TrainingSet {
 
     // Could just use the currb_ memeber (?)
     void shiftE(MPS const &W, int b, Direction dir) {
-        auto c = (dir == Fromleft) ? b : b + 1;
-        auto dc = (dir == Fromleft) ? +1 : -1;
+        const auto c = (dir == Fromleft) ? b : b + 1;
+        const auto dc = (dir == Fromleft) ? +1 : -1;
 
-        auto prevc = (dir == Fromleft) ? b - 1 : b + 2;
-        auto hasPrev = (prevc >= 1 && prevc <= site_count);
+        const auto prevc = (dir == Fromleft) ? b - 1 : b + 2;
+        const auto hasPrev = (prevc >= 1 && prevc <= site_count);
 
         // if (hasPrev) {
         //     printfln("## Advancing E from %d to %d", prevc, c);
@@ -261,9 +261,9 @@ class TrainingSet {
 // of the model from the ideal output
 //
 Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global()) {
-    auto training_image_count = ts.size();
-    auto lambda = args.getReal("lambda", 0.);
-    auto showlabels = args.getBool("ShowLabels", false);
+    const auto training_image_count = ts.size();
+    const auto lambda = args.getReal("lambda", 0.);
+    const auto showlabels = args.getBool("ShowLabels", false);
 
     auto L = findtype(B, Label);
     if (!L) {
@@ -330,10 +330,10 @@ Real quadcost(ITensor B, TrainingSet const &ts, Args const &args = Args::global(
 // Conjugate gradient
 //
 void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
-    auto training_image_count = ts.size();
-    auto Npass = args.getInt("Npass");
-    auto lambda = args.getReal("lambda", 0.);
-    auto cconv = args.getReal("cconv", 1E-10);
+    const auto training_image_count = ts.size();
+    const auto Npass = args.getInt("Npass");
+    const auto lambda = args.getReal("lambda", 0.);
+    const auto cconv = args.getReal("cconv", 1E-10);
     // printfln("In cgrad, lambda = %.3E", lambda); // pc
 
     auto L = findtype(B, Label);
@@ -354,7 +354,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
     }
 
     // Workspace for parallel ops
-    auto thread_count = ts.thread_count();
+    const auto thread_count = ts.thread_count();
     auto tensors = vector<ITensor>(thread_count, ITensor{});
     auto reals = vector<Real>(thread_count);
 
@@ -437,10 +437,10 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
 // M.L. DMRG
 //
 void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
-    auto N = W.N();
-    auto training_image_count = ts.size();
+    const auto N = W.N();
+    const auto training_image_count = ts.size();
 
-    auto method = args.getString("Method");
+    const auto method = args.getString("Method");
     std::function<void(ITensor &, TrainingSet &, Args const &)> optimize_bond_tensor;
     if (method == "conj") {
         optimize_bond_tensor = cgrad;
@@ -448,15 +448,15 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         Error(format("method type \"%s\" not recognized", method));
     }
 
-    auto replace = args.getBool("Replace", false);
-    auto pause_step = args.getBool("PauseStep", false);
+    const auto replace = args.getBool("Replace", false);
+    const auto pause_step = args.getBool("PauseStep", false);
 
-    auto thread_count = ts.thread_count();
-    auto reals = vector<Real>(thread_count);
+    // const auto thread_count = ts.thread_count();
+    // auto reals = vector<Real>(thread_count);
 
-    auto cargs = Args{args, "Normalize", false};
+    const auto cargs = Args{args, "Normalize", false};
 
-    int timing_count = 2 * (N - 1);
+    const int timing_count = 2 * (N - 1);
     auto setBond_timings = vector<double>(timing_count);
     auto createB_timings = vector<double>(timing_count);
     auto optimizeB_timings = vector<double>(timing_count);
@@ -636,39 +636,39 @@ int main(int argc, const char *argv[]) {
     }
     auto input = InputGroup(argv[1], "input");
 
-    int local_dimension = 2;
-    auto data_dir = input.getString("datadir", "/Users/mstoudenmire/software/tnml/mllib/MNIST");
-    auto max_training_image_count_per_label = input.getInt("Ntrain", 60000);
-    auto batch_count = input.getInt("Nbatch", 10);
-    auto sweep_count = input.getInt("Nsweep", 50);
-    auto cutoff = input.getReal("cutoff", 1E-10);
-    auto maxm = input.getInt("maxm", 5000);
-    auto minm = input.getInt("minm", max(10, maxm / 2));
-    auto ninitial = input.getInt("ninitial", 100);
-    auto thread_count = input.getInt("nthread", 1);
-    auto replace = input.getYesNo("replace", false);
-    auto pause_step = input.getYesNo("pause_step", false);
+    const int local_dimension = 2;
+    const auto data_dir = input.getString("datadir", "/Users/mstoudenmire/software/tnml/mllib/MNIST");
+    const auto max_training_image_count_per_label = input.getInt("Ntrain", 60000);
+    const auto batch_count = input.getInt("Nbatch", 10);
+    const auto sweep_count = input.getInt("Nsweep", 50);
+    const auto cutoff = input.getReal("cutoff", 1E-10);
+    const auto maxm = input.getInt("maxm", 5000);
+    const auto minm = input.getInt("minm", max(10, maxm / 2));
+    const auto ninitial = input.getInt("ninitial", 100);
+    const auto thread_count = input.getInt("nthread", 1);
+    const auto replace = input.getYesNo("replace", false);
+    const auto pause_step = input.getYesNo("pause_step", false);
     // auto feature = input.getString("feature","normal");
 
     // Cost function settings
-    auto lambda = input.getReal("lambda", 0.);
+    const auto lambda = input.getReal("lambda", 0.);
 
     // Gradient settings
-    auto method = input.getString("method", "conj");
-    auto alpha = input.getReal("alpha", 0.01);
-    auto clip = input.getReal("clip", 1.0);
-    auto Npass = input.getInt("Npass", 4);
-    auto cconv = input.getReal("cconv", 1E-10);
+    const auto method = input.getString("method", "conj");
+    const auto alpha = input.getReal("alpha", 0.01);
+    const auto clip = input.getReal("clip", 1.0);
+    const auto Npass = input.getInt("Npass", 4);
+    const auto cconv = input.getReal("cconv", 1E-10);
 
-    auto labels = array<long, LABEL_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
+    const auto labels = array<long, LABEL_COUNT>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
 
     auto training_images = readMNIST(data_dir, mllib::Train, {"NT=", max_training_image_count_per_label});
-    auto pixels_per_image = training_images.front().size();
+    const auto pixels_per_image = training_images.front().size();
     // Is this just where the labels index will be?
-    auto c = pixels_per_image / 2;
+    const auto c = pixels_per_image / 2;
     printfln("%d sites of dimension %d", pixels_per_image, local_dimension);
     SiteSet sites;
-    auto sites_filename = "sites";
+    const auto sites_filename = "sites";
     if (fileExists(sites_filename)) {
         sites = readFromFile<SiteSet>(sites_filename);
         if (sites(1).m() != (long)local_dimension) {
@@ -697,14 +697,14 @@ int main(int argc, const char *argv[]) {
         states.emplace_back(sites, img.label, img, phi);
     }
 
-    int training_image_count = states.size();
+    const int training_image_count = states.size();
     printfln("Total of %d training images", training_image_count);
 
     auto ts = TrainingSet(move(states), pixels_per_image, thread_count, batch_count);
 
     Index L;
     MPS W;
-    auto W_init_file = "Wstart";
+    const auto W_init_file = "Wstart";
     if (fileExists(W_init_file)) {
         printfln("Reading W from \"%s\"", W_init_file);
         W = readFromFile<MPS>(W_init_file, sites);
@@ -778,18 +778,18 @@ int main(int argc, const char *argv[]) {
         PAUSE;
     }
 
-    auto sweeps = Sweeps(sweep_count, minm, maxm, cutoff);
+    const auto sweeps = Sweeps(sweep_count, minm, maxm, cutoff);
 
-    auto args = Args{"lambda", lambda, "Method", method, "Npass",   Npass,   "alpha",     alpha,
+    const auto args = Args{"lambda", lambda, "Method", method, "Npass",   Npass,   "alpha",     alpha,
                      "clip",   clip,   "cconv",  cconv,  "Replace", replace, "PauseStep", pause_step};
 
-    auto start = std::chrono::high_resolution_clock::now();
+    const auto start = std::chrono::high_resolution_clock::now();
 
     mldmrg(W, ts, sweeps, args);
 
-    auto end = std::chrono::high_resolution_clock::now();
+    const auto end = std::chrono::high_resolution_clock::now();
 
-    std::chrono::duration<double> duration = end - start;
+    const std::chrono::duration<double> duration = end - start;
     std::cout << "Duration: " << duration.count() << " seconds\n";
 
     println("Writing W to disk");
