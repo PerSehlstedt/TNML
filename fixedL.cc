@@ -459,7 +459,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
     int timing_count = 2 * (N - 1);
     auto setBond_timings = vector<double>(timing_count);
     auto createB_timings = vector<double>(timing_count);
-    auto cgrad_timings = vector<double>(timing_count);
+    auto optimizeB_timings = vector<double>(timing_count);
     auto svd_timings = vector<double>(timing_count);
     auto shiftE_timings = vector<double>(timing_count);
 
@@ -509,7 +509,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
             // clang-format off
             TIME_IT(
             optimize_bond_tensor(B, ts, args);
-            , cgrad_timings.at(t_idx));
+            , optimizeB_timings.at(t_idx));
             // clang-format on
 
             //
@@ -592,11 +592,11 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         printfln("--> After Sweep, Cost = %.10f", new_quadratic_cost / training_image_count);
 
         std::vector<std::reference_wrapper<std::vector<double>>> all_timings = {
-            std::ref(setBond_timings), std::ref(createB_timings), std::ref(cgrad_timings), std::ref(svd_timings),
+            std::ref(setBond_timings), std::ref(createB_timings), std::ref(optimizeB_timings), std::ref(svd_timings),
             std::ref(shiftE_timings)};
 
         std::cout << "Time for each bond [ms]\n";
-        std::cout << "t_idx setBond createB cgrad svd shiftE\n";
+        std::cout << "t_idx setBond createB optimizeB svd shiftE\n";
         for (int i : range(timing_count)) {
             std::cout << i << " ";
             for (auto &t : all_timings) {
@@ -606,7 +606,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         }
 
         std::cout << "Average time for each bond [ms]\n";
-        std::cout << "setBond createB cgrad svd shiftE\n";
+        std::cout << "setBond createB optimizeB svd shiftE\n";
         auto all_avg_timings = vector<double>(all_timings.size());
         for (auto i : range(all_timings.size())) {
             all_avg_timings.at(i) = stdx::accumulate(all_timings.at(i).get(), 0.) / timing_count;
@@ -615,7 +615,7 @@ void mldmrg(MPS &W, TrainingSet &ts, Sweeps const &sweeps, Args args) {
         std::cout << "\n";
 
         std::cout << "Average Timings for each bond [%]\n";
-        std::cout << "setBond createB cgrad svd shiftE\n";
+        std::cout << "setBond createB optimizeB svd shiftE\n";
         auto total_avg_time = stdx::accumulate(all_avg_timings, 0.);
         for (auto &t : all_avg_timings) {
             std::cout << t / total_avg_time << " ";
