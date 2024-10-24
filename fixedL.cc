@@ -341,7 +341,7 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
     auto thread_count = ts.thread_count();
     auto tensors = vector<ITensor>(thread_count);
     auto reals = vector<Real>(thread_count);
-    auto ints = vector<int>(thread_count);
+    // auto ints = vector<int>(thread_count);
 
     // Compute initial gradient
     for (auto &T : tensors) {
@@ -406,14 +406,14 @@ void cgrad(ITensor &B, TrainingSet &ts, Args const &args) {
 
         auto C = stdx::accumulate(reals, 0.);
         C += lambda * sqr(norm(B));
-        printfln("  Cost = %.10f", C / training_image_count);
+        // printfln("  Cost = %.10f", C / training_image_count); // pc
 
         // Quit if gradient gets too small
         if (norm(r) < cconv) {
-            printfln("  |r| = %.1E < %.1E, breaking", norm(r), cconv);
+            // printfln("  |r| = %.1E < %.1E, breaking", norm(r), cconv); // pc
             break;
-        } else {
-            printfln("  |r| = %.1E", norm(r));
+        // } else {
+            // printfln("  |r| = %.1E", norm(r)); // pc
         }
 
         p = r + beta * p;
